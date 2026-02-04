@@ -1,6 +1,7 @@
 package com.example.cns.services;
 
 import com.example.cns.dto.NotificationRequestDto;
+import com.example.cns.dto.NotificationResponseDto;
 import com.example.cns.entities.*;
 import com.example.cns.repositories.*;
 import com.example.cns.exception.ResourceNotFoundException;
@@ -109,5 +110,27 @@ public class NotificationService {
             body = body.replace("{{" + entry.getKey() + "}}", entry.getValue());
         }
         return body;
+    }
+
+    public List<NotificationResponseDto> getAllNotifications() {
+        log.debug("Fetching all notifications from database");
+        List<Notification> notifications = notificationRepository.findAll();
+        return notifications.stream()
+                .map(this::convertToResponseDto)
+                .toList();
+    }
+
+    private NotificationResponseDto convertToResponseDto(Notification notification) {
+        return NotificationResponseDto.builder()
+                .id(notification.getId())
+                .templateId(notification.getTemplate().getId())
+                .recipientEmail(notification.getRecipientEmail())
+                .subject(notification.getSubject())
+                .body(notification.getBody())
+                .status(notification.getStatus())
+                .retryCount(notification.getRetryCount())
+                .createdAt(notification.getCreatedAt())
+                .createdBy(notification.getCreatedBy())
+                .build();
     }
 }
