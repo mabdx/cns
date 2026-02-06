@@ -1,0 +1,9 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.jar
+.DS_Store
+logs/
+mvnw.cmd

@@ -3,6 +3,7 @@ package com.example.cns.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -64,6 +65,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRemainingRuntimeExceptions(RuntimeException ex) {
         log.error("Unexpected error occurred: ", ex);
         return buildResponse("Internal Server Error", "An unexpected error occurred on our end.", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleIllegal(RuntimeException ex) {
+        log.error("Unexpected error occurred: ", ex);
+        return buildResponse("Illegal Argument", "Illegal Arguments in API", HttpStatus.BAD_REQUEST);
     }
 
     // Helper method for clean, consistent JSON responses

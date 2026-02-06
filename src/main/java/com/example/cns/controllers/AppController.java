@@ -28,7 +28,9 @@ public class AppController {
         return ResponseEntity.ok(appService.getAllApps());
     }
 
-    @DeleteMapping("/{id}")
+
+
+    @DeleteMapping("/delete/{id}")
     public ResponseEntity<String> deleteApp(@PathVariable Long id) {
         appService.deleteApp(id);
         return ResponseEntity.ok("App deleted successfully");

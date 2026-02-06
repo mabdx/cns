@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -20,13 +21,13 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @PostMapping("/send")
-    public ResponseEntity<String> send(@Valid @RequestBody NotificationRequestDto request) {
-        log.info("Received notification request for recipient: {}", request.getRecipient());
+    public ResponseEntity<Map<String, Object>> send(@Valid @RequestBody NotificationRequestDto request) {
+        log.info("Received notification request");
 
-        // This triggers your entire logic (validation, tag replacement, DB saving)
-        notificationService.sendNotification(request);
+        // The service now handles single, multiple, or no recipients automatically
+        Map<String, Object> result = notificationService.sendNotification(request);
 
-        return ResponseEntity.ok("Notification processed and logged successfully.");
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/logs")

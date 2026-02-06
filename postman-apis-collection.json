@@ -1,0 +1,474 @@
+{
+  "info": {
+    "name": "CNS - Notification Service API",
+    "description": "Complete API collection for testing the Crypto Notification Service (CNS)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Apps",
+      "item": [
+        {
+          "name": "Create App",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My App\",\n  \"createdBy\": \"Admin\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/apps/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "apps", "register"]
+            }
+          }
+        },
+        {
+          "name": "Get All Apps",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/apps",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "apps"]
+            }
+          }
+        },
+        {
+          "name": "Delete App",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/apps/delete/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "apps", "delete", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Create Template (ACTIVE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appId\": 1,\n  \"name\": \"Welcome Email\",\n  \"subject\": \"Welcome to CNS, {{name}}!\",\n  \"htmlBody\": \"<h1>Hello {{name}}</h1><p>Your verification code is: <b>{{otp}}</b>. This will expire in {{minutes}} minutes.</p>\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/templates/create",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Template (DRAFT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appId\": 1,\n  \"name\": \"Draft Email\",\n  \"subject\": \"Hello {{name}}\",\n  \"htmlBody\": \"<p>This is a draft template</p>\",\n  \"status\": \"DRAFT\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/templates/create",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get All Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/templates",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates"]
+            }
+          }
+        },
+        {
+          "name": "Get Template by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/templates/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appId\": 1,\n  \"name\": \"Updated Welcome Email\",\n  \"subject\": \"Welcome {{name}}!\",\n  \"htmlBody\": \"<h1>Hello {{name}}</h1><p>Updated verification code: {{otp}}</p>\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/templates/update/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "update", "1"]
+            }
+          }
+        },
+        {
+          "name": "Archive Template",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/templates/1/archive",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "1", "archive"]
+            }
+          }
+        },
+        {
+          "name": "Delete Template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/templates/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "1"]
+            }
+          }
+        },
+        {
+          "name": "Filter Templates by App and Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/templates/filter?appId=1&status=ACTIVE",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "filter"],
+              "query": [
+                {
+                  "key": "appId",
+                  "value": "1"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save Template as Draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appId\": 1,\n  \"name\": \"New Draft Template\",\n  \"subject\": \"Draft Subject {{name}}\",\n  \"htmlBody\": \"<p>This will be a draft</p>\",\n  \"status\": \"DRAFT\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/templates/draft",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "templates", "draft"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications - Valid Scenarios",
+      "item": [
+        {
+          "name": "Send to Single Recipient (Valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 1,\n  \"recipient\": \"user@example.com\",\n  \"placeholders\": {\n    \"name\": \"John Doe\",\n    \"otp\": \"123456\",\n    \"minutes\": \"10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        },
+        {
+          "name": "Send to Multiple Recipients (Valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 1,\n  \"recipients\": [\n    \"user1@example.com\",\n    \"user2@example.com\",\n    \"user3@example.com\"\n  ],\n  \"placeholders\": {\n    \"name\": \"Team\",\n    \"otp\": \"654321\",\n    \"minutes\": \"15\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        },
+        {
+          "name": "Send with No Recipients (Handled Internally)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 1,\n  \"placeholders\": {\n    \"name\": \"John\",\n    \"otp\": \"123456\",\n    \"minutes\": \"10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications - Error Scenarios",
+      "item": [
+        {
+          "name": "Invalid API Key (401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"invalid_key_12345\",\n  \"templateId\": 1,\n  \"recipient\": \"user@example.com\",\n  \"placeholders\": {\n    \"name\": \"John\",\n    \"otp\": \"123456\",\n    \"minutes\": \"10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        },
+        {
+          "name": "Template Not Found (404 Not Found)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 9999,\n  \"recipient\": \"user@example.com\",\n  \"placeholders\": {\n    \"name\": \"John\",\n    \"otp\": \"123456\",\n    \"minutes\": \"10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        },
+        {
+          "name": "Template Not ACTIVE or DRAFT (400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 2,\n  \"recipient\": \"user@example.com\",\n  \"placeholders\": {\n    \"name\": \"John\",\n    \"otp\": \"123456\",\n    \"minutes\": \"10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        },
+        {
+          "name": "Missing Required Tag (400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"api_key_1\",\n  \"templateId\": 1,\n  \"recipient\": \"user@example.com\",\n  \"placeholders\": {\n    \"name\": \"John\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications - View",
+      "item": [
+        {
+          "name": "Get All Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/logs",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notifications", "logs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/users/create",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users", "create"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/users/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users", "1"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
