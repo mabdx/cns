@@ -46,6 +46,20 @@
           }
         },
         {
+          "name": "Archive App",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/apps/1/archive",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "apps", "1", "archive"]
+            }
+          }
+        },
+        {
           "name": "Delete App",
           "request": {
             "method": "DELETE",

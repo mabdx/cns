@@ -28,7 +28,11 @@ public class AppController {
         return ResponseEntity.ok(appService.getAllApps());
     }
 
-
+    @PatchMapping("/{id}/archive")
+    public ResponseEntity<String> archiveApp(@PathVariable Long id) {
+        appService.archiveApp(id);
+        return ResponseEntity.ok("App archived successfully");
+    }
 
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<String> deleteApp(@PathVariable Long id) {
