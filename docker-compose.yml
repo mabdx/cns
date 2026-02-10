@@ -1,47 +1,41 @@
-version: '3.8'
-
 services:
-  # MySQL Database
-  mysql:
+  db:
     image: mysql:8.0
     container_name: cns-mysql
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass123
       MYSQL_DATABASE: cns
+      MYSQL_ROOT_PASSWORD: rootpass123
     ports:
       - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
+    networks:
+      - cns-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
 
-  # Spring Boot Application
-  cns-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     container_name: cns-app
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cns?createDatabaseIfNotExist=true&serverTimezone=UTC
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/cns?createDatabaseIfNotExist=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: rootpass123
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
-      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
-      SPRING_JPA_SHOW_SQL: "true"
-      LOGGING_LEVEL_ROOT: WARN
-      LOGGING_LEVEL_COM_EXAMPLE_CNS: DEBUG
-      LOGGING_LEVEL_ORG_HIBERNATE_ORM_RESULTS: WARN
-    depends_on:
-      mysql:
-        condition: service_healthy
-    volumes:
-      - ./logs:/app/logs
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+    env_file:
+      - .env
+    networks:
+      - cns-network
 
-volumes:
-  mysql_data:
+networks:
+  cns-network:
+    driver: bridge

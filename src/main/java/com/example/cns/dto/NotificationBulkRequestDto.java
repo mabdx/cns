@@ -15,7 +15,7 @@ public class NotificationBulkRequestDto {
     private Long templateId;
 
     @NotNull
-    private List<String> recipients;  // Multiple recipients
+    private Map<String, Map<String, String>> recipients; // Email -> Personalized Placeholders
 
-    private Map<String, String> placeholders;
+    private Map<String, String> globalPlaceholders; // Shared tags
 }

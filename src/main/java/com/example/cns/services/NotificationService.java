@@ -29,7 +29,7 @@ public class NotificationService {
 
         // Case 1: No recipients provided
         if ((request.getRecipient() == null || request.getRecipient().isBlank()) &&
-            (request.getRecipients() == null || request.getRecipients().isEmpty())) {
+                (request.getRecipients() == null || request.getRecipients().isEmpty())) {
             log.warn("No recipients provided in request - handling internally");
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("status", "ERROR");
@@ -56,10 +56,12 @@ public class NotificationService {
         }
 
         // Now process all recipients (whether 1 or many)
-        return processNotifications(request.getApiKey(), request.getTemplateId(), recipientList, request.getPlaceholders());
+        return processNotifications(request.getApiKey(), request.getTemplateId(), recipientList,
+                request.getPlaceholders());
     }
 
-    private Map<String, Object> processNotifications(String apiKey, Long templateId, List<String> recipients, Map<String, String> placeholders) {
+    private Map<String, Object> processNotifications(String apiKey, Long templateId, List<String> recipients,
+            Map<String, String> placeholders) {
         log.info("Starting notification process for {} recipient(s)", recipients.size());
 
         List<String> successfulRecipients = new ArrayList<>();
@@ -79,7 +81,11 @@ public class NotificationService {
                     return new ResourceNotFoundException("Template not found with ID: " + templateId);
                 });
 
-        // 3. INTEGRATION CHECK: Is template Active? - throws 400 if not active
+        // 3. INTEGRATION CHECK: Is App and Template Active?
+        if (app.isDeleted() || !"ACTIVE".equalsIgnoreCase(app.getStatus())) {
+            throw new IllegalStateException("Application is " + app.getStatus() + " or deleted, cannot send.");
+        }
+
         if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
             log.error("Template is not ACTIVE. Current status: {}", template.getStatus());
             throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
@@ -93,13 +99,14 @@ public class NotificationService {
             try {
                 log.debug("Processing notification for recipient: {}", recipient);
 
+                String finalSubject = resolve(template.getSubject(), placeholders);
                 String finalBody = resolve(template.getHtmlBody(), placeholders);
 
                 // Save as SENT for this recipient
                 Notification notification = Notification.builder()
                         .template(template)
                         .recipientEmail(recipient)
-                        .subject(template.getSubject())
+                        .subject(finalSubject)
                         .body(finalBody)
                         .status("SENT")
                         .retryCount(0)
@@ -115,12 +122,22 @@ public class NotificationService {
                 log.warn("Failed to send notification to recipient: {} - {}", recipient, e.getMessage());
 
                 // Save as FAILED for this recipient
+                // We preserve the body (if it was resolved) or use the template's body as a
+                // fallback
+                String attemptedBody = template.getHtmlBody();
+                try {
+                    attemptedBody = resolve(template.getHtmlBody(), placeholders);
+                } catch (Exception resolveEx) {
+                    log.warn("Could not resolve body for failed notification: {}", resolveEx.getMessage());
+                }
+
                 Notification notification = Notification.builder()
                         .template(template)
                         .recipientEmail(recipient)
                         .subject(template.getSubject())
-                        .body("ERROR: " + e.getMessage())
+                        .body(attemptedBody)
                         .status("FAILED")
+                        .errorMessage(e.getMessage())
                         .retryCount(0)
                         .createdBy(app.getName())
                         .build();
@@ -142,10 +159,56 @@ public class NotificationService {
         return response;
     }
 
+    public Map<String, Object> retryNotification(Long notificationId) {
+        log.info("Retrying notification with ID: {}", notificationId);
+
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with ID: " + notificationId));
+
+        if (!"FAILED".equalsIgnoreCase(notification.getStatus())) {
+            throw new IllegalStateException("Only FAILED notifications can be retried.");
+        }
+
+        try {
+            // Here you would call your actual sending logic (e.g., mailSender.send(...))
+            // For now, we simulate success as per existing implementation
+
+            notification.setStatus("SENT");
+            notification.setErrorMessage(null);
+            notification.setRetryCount(notification.getRetryCount() + 1);
+            notificationRepository.save(notification);
+
+            log.info("Notification {} retried successfully. New retry count: {}", notificationId,
+                    notification.getRetryCount());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "SUCCESS");
+            response.put("message", "Notification retried successfully");
+            response.put("notificationId", notificationId);
+            response.put("retryCount", notification.getRetryCount());
+            return response;
+
+        } catch (Exception e) {
+            log.error("Retry failed for notification {}: {}", notificationId, e.getMessage());
+
+            notification.setRetryCount(notification.getRetryCount() + 1);
+            notification.setErrorMessage("Retry failed: " + e.getMessage());
+            notificationRepository.save(notification);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "FAILED");
+            response.put("message", "Retry failed: " + e.getMessage());
+            response.put("notificationId", notificationId);
+            response.put("retryCount", notification.getRetryCount());
+            return response;
+        }
+    }
+
     public void sendNotificationOld(NotificationRequestDto request) {
         log.debug("Starting notification process for recipient: {}", request.getRecipient());
 
-        // We declare these outside the try block so we can use them in the 'catch' block
+        // We declare these outside the try block so we can use them in the 'catch'
+        // block
         App app = null;
         Template template = null;
 
@@ -188,7 +251,8 @@ public class NotificationService {
     }
 
     // Helper method to handle both SENT and FAILED saves
-    private void saveToHistory(App app, Template template, NotificationRequestDto request, String bodyContent, String status) {
+    private void saveToHistory(App app, Template template, NotificationRequestDto request, String bodyContent,
+            String status) {
         Notification notification = Notification.builder()
                 .template(template)
                 .recipientEmail(request.getRecipient())
@@ -208,7 +272,8 @@ public class NotificationService {
                 .map(TemplateTag::getTagName)
                 .toList();
 
-        if (requiredTags.isEmpty()) return;
+        if (requiredTags.isEmpty())
+            return;
 
         List<String> missing = new ArrayList<>();
         for (String required : requiredTags) {
@@ -224,15 +289,16 @@ public class NotificationService {
     }
 
     private String resolve(String body, Map<String, String> placeholders) {
-        if (placeholders == null) return body;
+        if (placeholders == null)
+            return body;
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             body = body.replace("{{" + entry.getKey() + "}}", entry.getValue());
         }
         return body;
     }
 
-    public Map<String, Object> sendBulkNotifications(String apiKey, Long templateId, List<String> recipients, Map<String, String> placeholders) {
-        log.info("Starting bulk notification process for {} recipients", recipients.size());
+    public Map<String, Object> sendBulkNotifications(com.example.cns.dto.NotificationBulkRequestDto request) {
+        log.info("Starting personalized bulk notification process for {} recipients", request.getRecipients().size());
 
         List<String> successfulRecipients = new ArrayList<>();
         List<String> failedRecipients = new ArrayList<>();
@@ -241,32 +307,53 @@ public class NotificationService {
         Template template = null;
 
         try {
-            // Validate API Key and Template once
-            app = appRepository.findByApiKey(apiKey)
+            // 1. API Key Validation
+            app = appRepository.findByApiKey(request.getApiKey())
                     .orElseThrow(() -> new SecurityException("Invalid API Key"));
 
-            template = templateRepository.findById(templateId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
+            // 2. Fetch Template
+            template = templateRepository.findById(request.getTemplateId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Template not found with ID: " + request.getTemplateId()));
 
+            // 3. INTEGRATION CHECK: Is template Active?
             if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
                 throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
             }
 
-            // Validate tags once
-            validateTags(template.getId(), placeholders);
+            // 4. Validate Global Tags (if any)
+            if (request.getGlobalPlaceholders() != null) {
+                validateTags(template.getId(), request.getGlobalPlaceholders());
+            }
 
-            // Process each recipient
-            for (String recipient : recipients) {
+            // 5. Process each recipient individually
+            for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
+                String recipientEmail = entry.getKey();
+                Map<String, String> personalizedPlaceholders = entry.getValue();
+
                 try {
-                    log.debug("Processing notification for recipient: {}", recipient);
+                    log.debug("Processing personalized notification for recipient: {}", recipientEmail);
 
-                    String finalBody = resolve(template.getHtmlBody(), placeholders);
+                    // Merge global with personalized (personalized takes precedence)
+                    Map<String, String> mergedPlaceholders = new HashMap<>();
+                    if (request.getGlobalPlaceholders() != null) {
+                        mergedPlaceholders.putAll(request.getGlobalPlaceholders());
+                    }
+                    if (personalizedPlaceholders != null) {
+                        mergedPlaceholders.putAll(personalizedPlaceholders);
+                    }
+
+                    // Validate merged tags for this recipient
+                    validateTags(template.getId(), mergedPlaceholders);
+
+                    String finalSubject = resolve(template.getSubject(), mergedPlaceholders);
+                    String finalBody = resolve(template.getHtmlBody(), mergedPlaceholders);
 
                     // Save as SENT for this recipient
                     Notification notification = Notification.builder()
                             .template(template)
-                            .recipientEmail(recipient)
-                            .subject(template.getSubject())
+                            .recipientEmail(recipientEmail)
+                            .subject(finalSubject)
                             .body(finalBody)
                             .status("SENT")
                             .retryCount(0)
@@ -274,44 +361,49 @@ public class NotificationService {
                             .build();
 
                     notificationRepository.save(notification);
-                    successfulRecipients.add(recipient);
-                    log.info("Notification sent successfully for recipient: {}", recipient);
+                    successfulRecipients.add(recipientEmail);
+                    log.info("Notification sent successfully for recipient: {}", recipientEmail);
 
                 } catch (Exception e) {
-                    failedRecipients.add(recipient);
-                    log.error("Failed to send notification to recipient: {} - {}", recipient, e.getMessage());
+                    failedRecipients.add(recipientEmail);
+                    log.error("Failed to send personalized notification to recipient: {} - {}", recipientEmail,
+                            e.getMessage());
 
                     // Save as FAILED for this recipient
-                    if (app != null && template != null) {
-                        Notification notification = Notification.builder()
-                                .template(template)
-                                .recipientEmail(recipient)
-                                .subject(template.getSubject())
-                                .body("ERROR: " + e.getMessage())
-                                .status("FAILED")
-                                .retryCount(0)
-                                .createdBy(app.getName())
-                                .build();
-                        notificationRepository.save(notification);
-                    }
+                    Notification notification = Notification.builder()
+                            .template(template)
+                            .recipientEmail(recipientEmail)
+                            .subject(template.getSubject())
+                            .body("ERROR: " + e.getMessage())
+                            .errorMessage(e.getMessage())
+                            .status("FAILED")
+                            .retryCount(0)
+                            .createdBy(app.getName())
+                            .build();
+                    notificationRepository.save(notification);
                 }
             }
 
         } catch (Exception e) {
-            log.error("Bulk notification process failed at validation stage: {}", e.getMessage());
-            // All recipients fail if template/app validation fails
-            failedRecipients.addAll(recipients);
+            log.error("Bulk personalized notification process failed at validation stage: {}", e.getMessage());
+            // If validation fails (API key/Template), we can't process any
+            if (request.getRecipients() != null) {
+                failedRecipients.addAll(request.getRecipients().keySet());
+            }
+            throw e; // Rethrow to let global handler handle it
         }
 
         // Build response
         Map<String, Object> response = new HashMap<>();
-        response.put("totalRecipients", recipients.size());
+        response.put("status", failedRecipients.isEmpty() ? "SUCCESS" : "PARTIAL_SUCCESS");
+        response.put("totalRecipients", request.getRecipients().size());
         response.put("successCount", successfulRecipients.size());
         response.put("failureCount", failedRecipients.size());
         response.put("successfulRecipients", successfulRecipients);
         response.put("failedRecipients", failedRecipients);
-        response.put("message", String.format("Bulk notification processing completed. %d succeeded, %d failed.",
-                successfulRecipients.size(), failedRecipients.size()));
+        response.put("message",
+                String.format("Personalized bulk notification processing completed. %d succeeded, %d failed.",
+                        successfulRecipients.size(), failedRecipients.size()));
 
         return response;
     }

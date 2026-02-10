@@ -8,8 +8,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class User {
     @Id
@@ -22,12 +24,17 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column
     private String passwordHash;
+
+    @Enumerated(EnumType.STRING)
+    private AuthProvider authProvider;
 
     private String role; // System Manager
 
+    @Builder.Default
     private boolean isActive = true;
+    @Builder.Default
     private boolean isDeleted = false;
 
     @CreationTimestamp

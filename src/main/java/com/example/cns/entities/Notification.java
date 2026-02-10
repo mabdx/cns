@@ -4,11 +4,18 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "notifications")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class Notification {
     @Id
@@ -29,6 +36,10 @@ public class Notification {
 
     private String status;
 
+    @Column(columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Builder.Default
     @Column(name = "retry_count")
     private int retryCount = 0;
 
@@ -37,5 +48,12 @@ public class Notification {
     private LocalDateTime createdAt;
 
     @Column(name = "created_by")
+    @CreatedBy
     private String createdBy;
+
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+
+    @LastModifiedBy
+    private String updatedBy;
 }

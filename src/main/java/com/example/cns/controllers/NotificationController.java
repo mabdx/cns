@@ -1,6 +1,7 @@
 package com.example.cns.controllers;
 
 import com.example.cns.dto.NotificationRequestDto;
+import com.example.cns.dto.NotificationBulkRequestDto;
 import com.example.cns.dto.NotificationResponseDto;
 import com.example.cns.services.NotificationService;
 import jakarta.validation.Valid;
@@ -27,6 +28,20 @@ public class NotificationController {
         // The service now handles single, multiple, or no recipients automatically
         Map<String, Object> result = notificationService.sendNotification(request);
 
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/send/bulk")
+    public ResponseEntity<Map<String, Object>> sendBulk(@Valid @RequestBody NotificationBulkRequestDto request) {
+        log.info("Received personalized bulk notification request");
+        Map<String, Object> result = notificationService.sendBulkNotifications(request);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/{id}/retry")
+    public ResponseEntity<Map<String, Object>> retry(@PathVariable Long id) {
+        log.info("Received retry request for notification ID: {}", id);
+        Map<String, Object> result = notificationService.retryNotification(id);
         return ResponseEntity.ok(result);
     }
 

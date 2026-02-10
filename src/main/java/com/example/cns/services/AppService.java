@@ -21,6 +21,12 @@ public class AppService {
 
     public AppResponseDto registerApp(@Valid AppRequestDto request) {
         log.info("Registering new application: {}", request.getName());
+
+        if (appRepository.existsByName(request.getName())) {
+            throw new com.example.cns.exception.DuplicateResourceException(
+                    "Application with name '" + request.getName() + "' already exists.");
+        }
+
         App app = App.builder()
                 .name(request.getName())
                 .status("ACTIVE")
@@ -49,7 +55,7 @@ public class AppService {
         app.setDeleted(true);
         app.setActive(false);
         app.setStatus("DELETED");
-        app.setApiKey(null);
+        // User feedback: do NOT nullify apiKey
 
         appRepository.save(app);
         log.info("App '{}' (ID: {}) has been successfully deleted.", app.getName(), id);
@@ -64,6 +70,10 @@ public class AppService {
                     return new ResourceNotFoundException("Cannot archive: App not found.");
                 });
 
+        if (app.isDeleted()) {
+            throw new com.example.cns.exception.InvalidOperationException("Cannot archive a DELETED app.");
+        }
+
         if ("ARCHIVED".equalsIgnoreCase(app.getStatus())) {
             log.warn("App with ID {} is already archived.", id);
             return;
@@ -76,6 +86,20 @@ public class AppService {
         log.info("App '{}' (ID: {}) has been successfully archived.", app.getName(), id);
     }
 
+    public void unarchiveApp(Long id) {
+        log.info("Attempting to unarchive app with ID: {}", id);
+        App app = appRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("App not found with id: " + id));
+
+        if (app.isDeleted()) {
+            throw new com.example.cns.exception.InvalidOperationException("Cannot unarchive a DELETED app.");
+        }
+
+        app.setStatus("ACTIVE");
+        app.setActive(true);
+        appRepository.save(app);
+        log.info("App '{}' (ID: {}) has been successfully unarchived.", app.getName(), id);
+    }
 
     private AppResponseDto mapToDto(App app) {
         return new AppResponseDto(
@@ -84,7 +108,6 @@ public class AppService {
                 app.getApiKey(),
                 app.getStatus(),
                 app.isActive(),
-                app.getCreatedAt()
-        );
+                app.getCreatedAt());
     }
 }

@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
-
 @RestController
 @RequestMapping("/api/apps")
 @RequiredArgsConstructor
@@ -19,8 +18,12 @@ public class AppController {
     private final AppService appService;
 
     @PostMapping("/register")
-    public ResponseEntity<AppResponseDto> resister(@Valid @RequestBody AppRequestDto request) {
-        return ResponseEntity.ok(appService.registerApp(request));
+    public ResponseEntity<java.util.Map<String, Object>> resister(@Valid @RequestBody AppRequestDto request) {
+        AppResponseDto app = appService.registerApp(request);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Application created successfully");
+        response.put("data", app);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping
@@ -29,14 +32,27 @@ public class AppController {
     }
 
     @PatchMapping("/{id}/archive")
-    public ResponseEntity<String> archiveApp(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> archiveApp(@PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
         appService.archiveApp(id);
-        return ResponseEntity.ok("App archived successfully");
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "App archived successfully");
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/delete/{id}")
-    public ResponseEntity<String> deleteApp(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> deleteApp(@PathVariable Long id) {
         appService.deleteApp(id);
-        return ResponseEntity.ok("App deleted successfully");
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "App deleted successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}/unarchive")
+    public ResponseEntity<java.util.Map<String, Object>> unarchiveApp(@PathVariable Long id) {
+        appService.unarchiveApp(id);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "App unarchived successfully");
+        return ResponseEntity.ok(response);
     }
 }

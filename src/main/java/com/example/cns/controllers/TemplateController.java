@@ -19,41 +19,63 @@ public class TemplateController {
     private final TemplateService templateService;
 
     @PostMapping("/create")
-    public ResponseEntity<TemplateResponseDto> create(@Valid @RequestBody TemplateRequestDto request) {
+    public ResponseEntity<java.util.Map<String, Object>> create(@Valid @RequestBody TemplateRequestDto request) {
         log.info("Received request to create template: {}", request.getName());
-        return ResponseEntity.ok(templateService.createTemplate(request));
+        TemplateResponseDto template = templateService.createTemplate(request);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Template created successfully");
+        response.put("data", template);
+        return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/update/{id}")
+    @GetMapping("/{id}")
+    public ResponseEntity<TemplateResponseDto> getById(@PathVariable Long id) {
+        log.info("Received request to fetch template ID: {}", id);
+        return ResponseEntity.ok(templateService.getTemplateById(id));
+    }
+
+    @PatchMapping("/{id}")
     public ResponseEntity<TemplateResponseDto> update(
             @PathVariable Long id,
-            @Valid @RequestBody TemplateRequestDto request
-    ) {
+            @RequestBody TemplateRequestDto request) {
         log.info("Received request to update template ID: {}", id);
         return ResponseEntity.ok(templateService.updateTemplate(id, request));
     }
 
     @PatchMapping("/{id}/archive")
-    public ResponseEntity<String> archive(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> archive(@PathVariable Long id) {
         log.info("Received request to archive template ID: {}", id);
         templateService.archiveTemplate(id);
-        return ResponseEntity.ok("Template archived successfully.");
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Template archived successfully");
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<java.util.Map<String, Object>> delete(@PathVariable Long id) {
         log.info("Received request to delete template ID: {}", id);
         templateService.deleteTemplate(id);
-        return ResponseEntity.noContent().build();
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Template soft-deleted successfully");
+        return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/filter")
-    public ResponseEntity<List<TemplateResponseDto>> filter(
-            @RequestParam Long appId,
-            @RequestParam String status
-    ) {
-        log.info("Received filter request for App ID: {} and Status: {}", appId, status);
-        return ResponseEntity.ok(templateService.getTemplatesByAppAndStatus(appId, status));
+    @PatchMapping("/{id}/activate")
+    public ResponseEntity<java.util.Map<String, Object>> activate(@PathVariable Long id) {
+        log.info("Received request to activate template ID: {}", id);
+        templateService.activateTemplate(id);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Template activated successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping
+    public ResponseEntity<org.springframework.data.domain.Page<TemplateResponseDto>> getAll(
+            @RequestParam(required = false) Long appId,
+            @RequestParam(required = false) String status,
+            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+        log.info("Received request to get/filter templates. App ID: {}, Status: {}", appId, status);
+        return ResponseEntity.ok(templateService.getTemplates(appId, status, pageable));
     }
 
     @PostMapping("/draft")

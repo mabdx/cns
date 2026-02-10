@@ -20,7 +20,6 @@ public class TemplateRequestDto {
     @NotBlank(message = "HTML Body is required")
     private String htmlBody;
 
+    @jakarta.validation.constraints.Pattern(regexp = "^(?i)(DRAFT|PUBLISHED|ARCHIVED)$", message = "Status must be DRAFT, PUBLISHED, or ARCHIVED")
     private String status;
-
-    private String updatedBy; // Name/username of who updated the template
 }

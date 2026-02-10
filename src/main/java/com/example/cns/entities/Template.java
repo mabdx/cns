@@ -6,11 +6,17 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "templates")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class Template {
     @Id
@@ -34,13 +40,21 @@ public class Template {
     @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TemplateTag> tags;
 
+    @Builder.Default
+    private boolean isActive = true;
+
+    @Builder.Default
+    private boolean isDeleted = false;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    @CreatedBy
     private String createdBy;
 
+    @LastModifiedBy
     private String updatedBy;
 }

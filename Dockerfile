@@ -1,28 +1,11 @@
 # Build stage
-FROM maven:3.9.6-eclipse-temurin-21 AS builder
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+COPY src /home/app/src
+COPY pom.xml /home/app
+RUN mvn -f /home/app/pom.xml clean package -DskipTests
 
-WORKDIR /app
-
-# Copy pom.xml and download dependencies
-COPY pom.xml .
-RUN mvn dependency:resolve
-
-# Copy source code
-COPY src ./src
-
-# Build the application
-RUN mvn clean package -DskipTests
-
-# Runtime stage
-FROM eclipse-temurin:21-jre-noble
-
-WORKDIR /app
-
-# Copy the JAR from builder stage
-COPY --from=builder /app/target/cns-*.jar app.jar
-
-# Expose port (change if your app runs on a different port)
+# Package stage
+FROM eclipse-temurin:21-jre
+COPY --from=build /home/app/target/*.jar /usr/local/lib/cns-app.jar
 EXPOSE 8080
-
-# Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java","-jar","/usr/local/lib/cns-app.jar"]
