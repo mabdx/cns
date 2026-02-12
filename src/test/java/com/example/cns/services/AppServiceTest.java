@@ -51,13 +51,13 @@ public class AppServiceTest {
         AppRequestDto request = new AppRequestDto();
         request.setName("GoSaaS HR");
 
-        when(appRepository.save(any(App.class))).thenReturn(testApp);
+        when(appRepository.saveAndFlush(any(App.class))).thenReturn(testApp);
 
         AppResponseDto response = appService.registerApp(request);
 
         assertNotNull(response);
         assertEquals("GoSaaS HR", response.getName());
-        verify(appRepository, times(1)).save(any(App.class));
+        verify(appRepository, times(1)).saveAndFlush(any(App.class));
     }
 
     @Test

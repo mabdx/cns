@@ -49,6 +49,8 @@ public class Template {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
+    // updatedAt and updatedBy should be null on creation, only set on actual
+    // updates
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 

@@ -32,9 +32,7 @@ Authorization: Bearer invalid_token
 POST /api/apps/register
 Authorization: Bearer <TOKEN>
 {
-  "name": "Production Service",
-  "createdBy": "Admin",
-  "status": "ACTIVE"
+  "name": "Production Service"
 }
 ```
 - **Expected**: `200 OK`
@@ -108,7 +106,7 @@ POST /api/notifications/send/bulk
 {
   "apiKey": "<APP_API_KEY>",
   "templateId": 1,
-  "recipientData": {
+  "recipients": {
     "alice@example.com": { "otp": "1111" },
     "bob@example.com": { "otp": "2222" }
   }

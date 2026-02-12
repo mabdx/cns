@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 @Slf4j
 @RestController
@@ -46,9 +49,12 @@ public class NotificationController {
     }
 
     @GetMapping("/logs")
-    public ResponseEntity<List<NotificationResponseDto>> getAllNotifications() {
-        log.info("Fetching all notifications");
-        List<NotificationResponseDto> notifications = notificationService.getAllNotifications();
-        return ResponseEntity.ok(notifications);
+    public ResponseEntity<Page<NotificationResponseDto>> getAllNotifications(
+            @RequestParam(required = false) Long templateId,
+            @RequestParam(required = false) String recipientEmail,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 10, sort = "id") Pageable pageable) {
+        log.info("Fetching filtered notification logs");
+        return ResponseEntity.ok(notificationService.getAllNotifications(templateId, recipientEmail, status, pageable));
     }
 }

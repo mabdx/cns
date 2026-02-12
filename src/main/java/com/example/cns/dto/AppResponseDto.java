@@ -17,7 +17,9 @@ public class AppResponseDto {
     private String apiKey;
     private String status;
     private Boolean isActive;
+    private Boolean isDeleted;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String createdBy;
+    private String updatedBy;
 }
-
-

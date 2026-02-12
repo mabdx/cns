@@ -71,7 +71,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(
             org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
-        return buildResponse("Bad Request", "Invalid parameter type: " + ex.getName(), HttpStatus.BAD_REQUEST, null);
+        String name = ex.getName();
+        String type = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
+        Object value = ex.getValue();
+        String message = String.format("Invalid value '%s' for parameter '%s'. Expected type: %s", value, name, type);
+
+        if ("page".equals(name) || "size".equals(name)) {
+            message = "Pagination parameter '" + name + "' must be a valid number.";
+        }
+
+        return buildResponse("Bad Request", message, HttpStatus.BAD_REQUEST, null);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.example.cns.entities;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -44,7 +45,9 @@ public class App {
     @CreatedBy
     private String createdBy; // Name/username of the System Manager
 
-    @LastModifiedDate
+    // updatedAt and updatedBy should be null on creation, only set on actual
+    // updates
+    @UpdateTimestamp
     private LocalDateTime updatedAt;
 
     @LastModifiedBy

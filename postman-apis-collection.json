@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c1f7b8e1-7d1a-4b0e-8f2a-d9c0e2b1f3a5",
     "name": "CNS - Notification Service API",
-    "description": "Complete API collection for testing the Crypto Notification Service (CNS) with JWT Authentication.",
+    "description": "Complete API collection for testing the CNS with JWT Authentication.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -16,7 +16,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"My New Application\",\n  \"createdBy\": \"Admin User\",\n  \"status\": \"ACTIVE\"\n}",
+              "raw": "{\n  \"name\": \"My New Application\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -43,13 +43,46 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/apps",
+              "raw": "{{base_url}}/api/apps?name=My&page=0&size=10",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "apps"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "My"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get App by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/apps/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "1"
               ]
             }
           },
@@ -210,7 +243,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject\": \"New Subject for {{name}}\"\n}",
+              "raw": "{\n  \"subject\": \"New Subject for {{name}}\",\n  \"status\": \"ACTIVE\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -297,7 +330,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"appId\": 1,\n  \"name\": \"Draft Template\",\n  \"status\": \"DRAFT\"\n}",
+              "raw": "{\n  \"appId\": 1,\n  \"name\": \"Draft Template\",\n  \"subject\": \"Draft Subject\",\n  \"htmlBody\": \"<p>Draft Body</p>\",\n  \"status\": \"DRAFT\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -324,7 +357,7 @@
       "name": "Notifications",
       "item": [
         {
-          "name": "Send Single/Multiple (Common)",
+          "name": "Send Single",
           "request": {
             "auth": {
               "type": "noauth"
@@ -350,8 +383,38 @@
                 "notifications",
                 "send"
               ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Multiple (Batch)",
+          "request": {
+            "auth": {
+              "type": "noauth"
             },
-            "description": "Note: This endpoint is PERMITTED without JWT because it uses API Key auth."
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{app_api_key}}\",\n  \"templateId\": 1,\n  \"recipients\": [\"user1@example.com\", \"user2@example.com\"],\n  \"placeholders\": {\n    \"name\": \"Team\",\n    \"otp\": \"9999\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/send",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "send"
+              ]
+            }
           },
           "response": []
         },
@@ -365,7 +428,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"apiKey\": \"{{app_api_key}}\",\n  \"templateId\": 1,\n  \"recipientData\": {\n    \"user1@example.com\": {\n      \"name\": \"Alice\",\n      \"otp\": \"1111\"\n    },\n    \"user2@example.com\": {\n      \"name\": \"Bob\",\n      \"otp\": \"2222\"\n    }\n  }\n}",
+              "raw": "{\n  \"apiKey\": \"{{app_api_key}}\",\n  \"templateId\": 1,\n  \"recipients\": {\n    \"user1@example.com\": {\n      \"name\": \"Alice\",\n      \"otp\": \"1111\"\n    },\n    \"user2@example.com\": {\n      \"name\": \"Bob\",\n      \"otp\": \"2222\"\n    }\n  },\n  \"globalPlaceholders\": {\n    \"company\": \"GoSaaS\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -413,7 +476,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/notifications/logs",
+              "raw": "{{base_url}}/api/notifications/logs?templateId=1&status=SENT&page=0&size=10",
               "host": [
                 "{{base_url}}"
               ],
@@ -421,6 +484,28 @@
                 "api",
                 "notifications",
                 "logs"
+              ],
+              "query": [
+                {
+                  "key": "templateId",
+                  "value": "1"
+                },
+                {
+                  "key": "recipientEmail",
+                  "value": "user@example.com"
+                },
+                {
+                  "key": "status",
+                  "value": "SENT"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
               ]
             }
           },
@@ -439,26 +524,6 @@
       }
     ]
   },
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
-    },
-    {
-      "listen": "test",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
-    }
-  ],
   "variable": [
     {
       "key": "base_url",

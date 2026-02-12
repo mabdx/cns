@@ -27,13 +27,20 @@ public class AppController {
     }
 
     @GetMapping
-    public ResponseEntity<List<AppResponseDto>> getAllApps() {
-        return ResponseEntity.ok(appService.getAllApps());
+    public ResponseEntity<org.springframework.data.domain.Page<AppResponseDto>> getAllApps(
+            @RequestParam(required = false) Long id,
+            @RequestParam(required = false) String name,
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "id") org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(appService.getAllApps(id, name, pageable));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AppResponseDto> getAppById(@PathVariable Long id) {
+        return ResponseEntity.ok(appService.getAppById(id));
     }
 
     @PatchMapping("/{id}/archive")
-    public ResponseEntity<java.util.Map<String, Object>> archiveApp(@PathVariable Long id,
-            @RequestBody java.util.Map<String, Object> body) {
+    public ResponseEntity<java.util.Map<String, Object>> archiveApp(@PathVariable Long id) {
         appService.archiveApp(id);
         java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "App archived successfully");

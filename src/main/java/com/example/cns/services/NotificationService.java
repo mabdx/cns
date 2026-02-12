@@ -5,14 +5,14 @@ import com.example.cns.dto.NotificationResponseDto;
 import com.example.cns.entities.*;
 import com.example.cns.repositories.*;
 import com.example.cns.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -27,17 +27,10 @@ public class NotificationService {
     public Map<String, Object> sendNotification(NotificationRequestDto request) {
         log.info("Received notification request");
 
-        // Case 1: No recipients provided
         if ((request.getRecipient() == null || request.getRecipient().isBlank()) &&
                 (request.getRecipients() == null || request.getRecipients().isEmpty())) {
-            log.warn("No recipients provided in request - handling internally");
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", "At least one recipient must be provided");
-            errorResponse.put("totalRecipients", 0);
-            errorResponse.put("successCount", 0);
-            errorResponse.put("failureCount", 0);
-            return errorResponse;
+            log.warn("No recipients provided in request");
+            throw new IllegalArgumentException("At least one recipient must be provided");
         }
 
         // Prepare recipient list
@@ -56,7 +49,19 @@ public class NotificationService {
         }
 
         // Now process all recipients (whether 1 or many)
-        return processNotifications(request.getApiKey(), request.getTemplateId(), recipientList,
+        // Ensure unique recipients (No repeated users)
+        List<String> uniqueRecipients = recipientList.stream()
+                .filter(Objects::nonNull)
+                .filter(r -> !r.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (uniqueRecipients.isEmpty()) {
+            log.warn("No valid recipients after filtering duplicates and blanks");
+            throw new IllegalArgumentException("No valid recipients provided");
+        }
+
+        return processNotifications(request.getApiKey(), request.getTemplateId(), uniqueRecipients,
                 request.getPlaceholders());
     }
 
@@ -80,6 +85,15 @@ public class NotificationService {
                     log.error("Template not found with ID: {}", templateId);
                     return new ResourceNotFoundException("Template not found with ID: " + templateId);
                 });
+
+        // 2.5 Ownership Check: Does template belong to this app?
+        if (!template.getApp().getId().equals(app.getId())) {
+            log.error(
+                    "Security Breach Attempt: App '{}' (ID: {}) tried to use Template '{}' (ID: {}) which belongs to App '{}' (ID: {})",
+                    app.getName(), app.getId(), template.getName(), template.getId(),
+                    template.getApp().getName(), template.getApp().getId());
+            throw new SecurityException("Template ID " + templateId + " does not belong to this application.");
+        }
 
         // 3. INTEGRATION CHECK: Is App and Template Active?
         if (app.isDeleted() || !"ACTIVE".equalsIgnoreCase(app.getStatus())) {
@@ -105,12 +119,12 @@ public class NotificationService {
                 // Save as SENT for this recipient
                 Notification notification = Notification.builder()
                         .template(template)
+                        .app(app)
                         .recipientEmail(recipient)
                         .subject(finalSubject)
                         .body(finalBody)
                         .status("SENT")
                         .retryCount(0)
-                        .createdBy(app.getName())
                         .build();
 
                 notificationRepository.save(notification);
@@ -133,13 +147,13 @@ public class NotificationService {
 
                 Notification notification = Notification.builder()
                         .template(template)
+                        .app(app)
                         .recipientEmail(recipient)
                         .subject(template.getSubject())
                         .body(attemptedBody)
                         .status("FAILED")
                         .errorMessage(e.getMessage())
                         .retryCount(0)
-                        .createdBy(app.getName())
                         .build();
                 notificationRepository.save(notification);
             }
@@ -255,12 +269,12 @@ public class NotificationService {
             String status) {
         Notification notification = Notification.builder()
                 .template(template)
+                .app(app)
                 .recipientEmail(request.getRecipient())
                 .subject(template.getSubject())
                 .body(bodyContent) // Success = HTML, Failure = Error Message
                 .status(status)
                 .retryCount(0)
-                .createdBy(app.getName())
                 .build();
 
         notificationRepository.save(notification);
@@ -277,7 +291,8 @@ public class NotificationService {
 
         List<String> missing = new ArrayList<>();
         for (String required : requiredTags) {
-            if (placeholders == null || !placeholders.containsKey(required)) {
+            String value = (placeholders != null) ? placeholders.get(required) : null;
+            if (value == null || value.isBlank()) {
                 missing.add(required);
             }
         }
@@ -298,6 +313,14 @@ public class NotificationService {
     }
 
     public Map<String, Object> sendBulkNotifications(com.example.cns.dto.NotificationBulkRequestDto request) {
+        if (request.getRecipients() == null || request.getRecipients().isEmpty()) {
+            log.warn("Empty bulk recipients map provided");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", "At least one recipient must be provided");
+            return errorResponse;
+        }
+
         log.info("Starting personalized bulk notification process for {} recipients", request.getRecipients().size());
 
         List<String> successfulRecipients = new ArrayList<>();
@@ -316,6 +339,16 @@ public class NotificationService {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Template not found with ID: " + request.getTemplateId()));
 
+            // 2.5 Ownership Check: Does template belong to this app?
+            if (!template.getApp().getId().equals(app.getId())) {
+                log.error(
+                        "Security Breach Attempt (Bulk): App '{}' (ID: {}) tried to use Template '{}' (ID: {}) which belongs to App '{}' (ID: {})",
+                        app.getName(), app.getId(), template.getName(), template.getId(),
+                        template.getApp().getName(), template.getApp().getId());
+                throw new SecurityException(
+                        "Template ID " + request.getTemplateId() + " does not belong to this application.");
+            }
+
             // 3. INTEGRATION CHECK: Is template Active?
             if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
                 throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
@@ -327,8 +360,17 @@ public class NotificationService {
             }
 
             // 5. Process each recipient individually
+            Set<String> processedEmails = new HashSet<>();
+
             for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
                 String recipientEmail = entry.getKey();
+
+                if (processedEmails.contains(recipientEmail)) {
+                    log.warn("Skipping duplicate email in bulk request: {}", recipientEmail);
+                    continue;
+                }
+                processedEmails.add(recipientEmail);
+
                 Map<String, String> personalizedPlaceholders = entry.getValue();
 
                 try {
@@ -352,12 +394,12 @@ public class NotificationService {
                     // Save as SENT for this recipient
                     Notification notification = Notification.builder()
                             .template(template)
+                            .app(app)
                             .recipientEmail(recipientEmail)
                             .subject(finalSubject)
                             .body(finalBody)
                             .status("SENT")
                             .retryCount(0)
-                            .createdBy(app.getName())
                             .build();
 
                     notificationRepository.save(notification);
@@ -372,13 +414,13 @@ public class NotificationService {
                     // Save as FAILED for this recipient
                     Notification notification = Notification.builder()
                             .template(template)
+                            .app(app)
                             .recipientEmail(recipientEmail)
                             .subject(template.getSubject())
                             .body("ERROR: " + e.getMessage())
                             .errorMessage(e.getMessage())
                             .status("FAILED")
                             .retryCount(0)
-                            .createdBy(app.getName())
                             .build();
                     notificationRepository.save(notification);
                 }
@@ -408,12 +450,13 @@ public class NotificationService {
         return response;
     }
 
-    public List<NotificationResponseDto> getAllNotifications() {
-        log.debug("Fetching all notifications from database");
-        List<Notification> notifications = notificationRepository.findAll();
-        return notifications.stream()
-                .map(this::convertToResponseDto)
-                .toList();
+    public Page<NotificationResponseDto> getAllNotifications(Long templateId, String recipientEmail, String status,
+            Pageable pageable) {
+        log.debug("Fetching notifications with filters - TemplateId: {}, Email: {}, Status: {}", templateId,
+                recipientEmail, status);
+        Page<Notification> notifications = notificationRepository.findByFilters(templateId, recipientEmail, status,
+                pageable);
+        return notifications.map(this::convertToResponseDto);
     }
 
     private NotificationResponseDto convertToResponseDto(Notification notification) {
@@ -426,7 +469,7 @@ public class NotificationService {
                 .status(notification.getStatus())
                 .retryCount(notification.getRetryCount())
                 .createdAt(notification.getCreatedAt())
-                .createdBy(notification.getCreatedBy())
+                .appName(notification.getApp().getName())
                 .build();
     }
 }

@@ -8,13 +8,13 @@ import java.util.Map;
 
 @Data
 public class NotificationBulkRequestDto {
-    @NotBlank
+    @NotBlank(message = "API Key is mandatory")
     private String apiKey;
 
-    @NotNull
+    @NotNull(message = "Template ID is mandatory")
     private Long templateId;
 
-    @NotNull
+    @jakarta.validation.constraints.NotEmpty(message = "Recipients list cannot be empty")
     private Map<String, Map<String, String>> recipients; // Email -> Personalized Placeholders
 
     private Map<String, String> globalPlaceholders; // Shared tags

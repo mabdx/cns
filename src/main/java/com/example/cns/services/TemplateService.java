@@ -14,11 +14,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 
 @Slf4j
 @Service
@@ -53,6 +58,9 @@ public class TemplateService {
                     "Template with name '" + request.getName() + "' already exists for this app.");
         }
 
+        String currentAuditor = getCurrentAuditor();
+        LocalDateTime now = LocalDateTime.now();
+
         Template template = Template.builder()
                 .app(app)
                 .name(request.getName())
@@ -61,9 +69,12 @@ public class TemplateService {
                 .status(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE")
                 .isActive(request.getStatus() == null || "ACTIVE".equalsIgnoreCase(request.getStatus()))
                 .isDeleted(false)
+                .createdAt(now) // Manually set for immediate response
+                .createdBy(currentAuditor) // Manually set for immediate response
+                .updatedAt(now) // Manually set
                 .build();
 
-        Template savedTemplate = templateRepository.save(template);
+        Template savedTemplate = templateRepository.saveAndFlush(template);
 
         // Logic: Scan HTML for {{tags}} and save to DB
         List<String> extractedTags = extractAndSaveTags(savedTemplate, request.getHtmlBody());
@@ -89,9 +100,39 @@ public class TemplateService {
             throw new com.example.cns.exception.InvalidOperationException("Cannot edit a DELETED template");
         }
 
+        // BUG_40: Check if payload is empty
+        if (request.getName() == null && request.getSubject() == null &&
+                request.getHtmlBody() == null && request.getStatus() == null && request.getAppId() == null) {
+            throw new IllegalArgumentException("No fields to update");
+        }
+
+        // BUG_39: Validate appId if provided
+        if (request.getAppId() != null) {
+            App newApp = appRepository.findById(request.getAppId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Application not found with ID: " + request.getAppId()));
+
+            if (newApp.isDeleted()) {
+                throw new com.example.cns.exception.InvalidOperationException(
+                        "Cannot update template with a deleted application");
+            }
+
+            if ("ARCHIVED".equalsIgnoreCase(newApp.getStatus())) {
+                throw new com.example.cns.exception.InvalidOperationException(
+                        "Cannot update template with an archived application");
+            }
+
+            template.setApp(newApp);
+        }
+
         boolean contentChanged = false;
 
         if (request.getName() != null) {
+            // BUG_41: Check if name is empty
+            if (request.getName().trim().isEmpty()) {
+                throw new IllegalArgumentException("Template name cannot be empty");
+            }
+
             if (templateRepository.existsByAppIdAndName(template.getApp().getId(), request.getName())
                     && !template.getName().equals(request.getName())) {
                 throw new com.example.cns.exception.DuplicateResourceException(
@@ -100,6 +141,10 @@ public class TemplateService {
             template.setName(request.getName());
         }
         if (request.getSubject() != null) {
+            // BUG_41: Check if subject is empty
+            if (request.getSubject().trim().isEmpty()) {
+                throw new IllegalArgumentException("Subject cannot be empty");
+            }
             template.setSubject(request.getSubject());
         }
         if (request.getHtmlBody() != null) {
@@ -114,6 +159,10 @@ public class TemplateService {
             template.setStatus(newStatus);
             template.setActive("ACTIVE".equalsIgnoreCase(newStatus));
         }
+
+        // Set update timestamp manually since we removed @UpdateTimestamp
+        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedBy(getCurrentAuditor());
 
         Template savedTemplate = templateRepository.save(template);
 
@@ -142,8 +191,10 @@ public class TemplateService {
 
         template.setStatus("ARCHIVED");
         template.setActive(false);
+        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedBy(getCurrentAuditor());
         templateRepository.save(template);
-        log.info("Template ID: {} moved to ARCHIVED status", id);
+        log.info("Template ID: {} moved to ARCHIVED status. UpdatedBy: {}", id, template.getUpdatedBy());
     }
 
     /**
@@ -153,11 +204,18 @@ public class TemplateService {
         Template template = templateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
 
+        if (template.isDeleted()) {
+            log.warn("Delete failed: Template with ID {} is already deleted", id);
+            throw new com.example.cns.exception.InvalidOperationException("Template already deleted");
+        }
+
         template.setDeleted(true);
         template.setActive(false);
         template.setStatus("DELETED");
+        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedBy(getCurrentAuditor());
         templateRepository.save(template);
-        log.info("Template ID: {} soft deleted", id);
+        log.info("Template ID: {} has been soft-deleted. UpdatedBy: {}", id, template.getUpdatedBy());
     }
 
     /**
@@ -173,8 +231,22 @@ public class TemplateService {
 
         template.setStatus("ACTIVE");
         template.setActive(true);
+        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedBy(getCurrentAuditor());
         templateRepository.save(template);
-        log.info("Template ID: {} activated (Unarchived/Undrafted)", id);
+        log.info("Template ID: {} activated (Unarchived/Undrafted). UpdatedBy: {}", id, template.getUpdatedBy());
+    }
+
+    private String getCurrentAuditor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return "SYSTEM";
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof OAuth2User oAuth2User) {
+            return oAuth2User.getAttribute("name");
+        }
+        return authentication.getName();
     }
 
     /**
@@ -182,15 +254,33 @@ public class TemplateService {
      */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<TemplateResponseDto> getTemplates(Long appId, String status,
+            String name,
             org.springframework.data.domain.Pageable pageable) {
 
-        // Ensure we always filter out DELETED templates unless status="DELETED" is
-        // explicitly asked?
-        // User said: "the deleted ones shouldnt show if we get all templates."
-        // So we strictly exclude DELETED from results.
+        // Validate appId if provided
+        if (appId != null) {
+            App app = appRepository.findById(appId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Application not found with ID: " + appId));
+
+            if (app.isDeleted()) {
+                throw new com.example.cns.exception.InvalidOperationException(
+                        "Cannot filter templates for a deleted application");
+            }
+        }
+
+        // Validate status if provided
+        if (status != null && !status.trim().isEmpty()) {
+            String upperStatus = status.toUpperCase();
+            if (!upperStatus.equals("ACTIVE") && !upperStatus.equals("ARCHIVED") &&
+                    !upperStatus.equals("DRAFT") && !upperStatus.equals("DELETED")) {
+                throw new IllegalArgumentException(
+                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT, DELETED");
+            }
+            status = upperStatus;
+        }
 
         org.springframework.data.domain.Page<Template> templates = templateRepository.findByAppIdAndStatus(appId,
-                status != null ? status.toUpperCase() : null, pageable);
+                status, name, pageable);
 
         return templates.map(t -> {
             List<String> tags = tagRepository.findByTemplateId(t.getId())
@@ -257,12 +347,18 @@ public class TemplateService {
     private TemplateResponseDto mapToDto(Template t, List<String> tags) {
         return TemplateResponseDto.builder()
                 .id(t.getId())
+                .appId(t.getApp().getId())
                 .appName(t.getApp().getName())
                 .name(t.getName())
                 .htmlBody(t.getHtmlBody())
                 .subject(t.getSubject())
                 .status(t.getStatus())
-                .detectedTags(tags) // Returns the list of tags to the frontend/user
+                .detectedTags(tags)
+                .isDeleted(t.isDeleted())
+                .createdAt(t.getCreatedAt())
+                .updatedAt(t.getUpdatedAt())
+                .createdBy(t.getCreatedBy())
+                .updatedBy(t.getUpdatedBy())
                 .build();
     }
 }

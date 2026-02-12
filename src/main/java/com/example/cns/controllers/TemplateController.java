@@ -35,11 +35,15 @@ public class TemplateController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<TemplateResponseDto> update(
+    public ResponseEntity<java.util.Map<String, Object>> update(
             @PathVariable Long id,
             @RequestBody TemplateRequestDto request) {
         log.info("Received request to update template ID: {}", id);
-        return ResponseEntity.ok(templateService.updateTemplate(id, request));
+        TemplateResponseDto template = templateService.updateTemplate(id, request);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Template updated successfully");
+        response.put("data", template);
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id}/archive")
@@ -73,9 +77,10 @@ public class TemplateController {
     public ResponseEntity<org.springframework.data.domain.Page<TemplateResponseDto>> getAll(
             @RequestParam(required = false) Long appId,
             @RequestParam(required = false) String status,
-            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
-        log.info("Received request to get/filter templates. App ID: {}, Status: {}", appId, status);
-        return ResponseEntity.ok(templateService.getTemplates(appId, status, pageable));
+            @RequestParam(required = false) String name,
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "id") org.springframework.data.domain.Pageable pageable) {
+        log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}", appId, status, name);
+        return ResponseEntity.ok(templateService.getTemplates(appId, status, name, pageable));
     }
 
     @PostMapping("/draft")

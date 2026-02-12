@@ -19,5 +19,5 @@ public class NotificationResponseDto {
     private String status;
     private int retryCount;
     private LocalDateTime createdAt;
-    private String createdBy;
+    private String appName;
 }

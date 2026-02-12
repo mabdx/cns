@@ -8,12 +8,16 @@ import java.util.List;
 @Builder
 public class TemplateResponseDto {
     private Long id;
+    private Long appId;
     private String appName;
     private String name;
     private String subject;
     private String htmlBody;
     private String status;
     private List<String> detectedTags;
+    private Boolean isDeleted;
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
     private String createdBy;
     private String updatedBy;
 }

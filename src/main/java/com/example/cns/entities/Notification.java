@@ -43,17 +43,11 @@ public class Notification {
     @Column(name = "retry_count")
     private int retryCount = 0;
 
+    @ManyToOne
+    @JoinColumn(name = "app_id", nullable = false)
+    private App app;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "created_by")
-    @CreatedBy
-    private String createdBy;
-
-    @LastModifiedDate
-    private LocalDateTime updatedAt;
-
-    @LastModifiedBy
-    private String updatedBy;
 }

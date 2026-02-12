@@ -41,7 +41,7 @@ Requests in the **Notifications** folder do **not** require a JWT token. They us
   {
     "apiKey": "{{app_api_key}}",
     "templateId": 1,
-    "recipientData": {
+    "recipients": {
       "user1@example.com": { "name": "Alice", "otp": "1111" },
       "user2@example.com": { "name": "Bob", "otp": "2222" }
     }
