@@ -46,15 +46,6 @@ public class TemplateController {
         return ResponseEntity.ok(response);
     }
 
-    @PatchMapping("/{id}/archive")
-    public ResponseEntity<java.util.Map<String, Object>> archive(@PathVariable Long id) {
-        log.info("Received request to archive template ID: {}", id);
-        templateService.archiveTemplate(id);
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("message", "Template archived successfully");
-        return ResponseEntity.ok(response);
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<java.util.Map<String, Object>> delete(@PathVariable Long id) {
         log.info("Received request to delete template ID: {}", id);

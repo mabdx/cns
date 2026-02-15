@@ -3,11 +3,8 @@ package com.example.cns.entities;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import org.springframework.data.annotation.CreatedBy;
-import org.springframework.data.annotation.LastModifiedBy;
-import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
@@ -45,11 +42,8 @@ public class App {
     @CreatedBy
     private String createdBy; // Name/username of the System Manager
 
-    // updatedAt and updatedBy should be null on creation, only set on actual
-    // updates
-    @UpdateTimestamp
+    // These fields are now manually managed in the service layer
     private LocalDateTime updatedAt;
 
-    @LastModifiedBy
     private String updatedBy;
 }

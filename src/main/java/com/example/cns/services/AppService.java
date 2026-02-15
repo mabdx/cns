@@ -43,6 +43,8 @@ public class AppService {
                 .isDeleted(false)
                 .createdAt(now) // Manually set for immediate response
                 .createdBy(currentAuditor) // Manually set for immediate response
+                .updatedAt(null) // Explicitly set to null for new registration
+                .updatedBy(null) // Explicitly set to null for new registration
                 .build();
 
         App savedApp = appRepository.saveAndFlush(app);
@@ -65,6 +67,55 @@ public class AppService {
         return mapToDto(app);
     }
 
+    public AppResponseDto updateApp(Long id, AppRequestDto request) {
+        log.debug("Entering updateApp for App ID: {}", id);
+
+        App app = appRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("App not found"));
+
+        if (app.isDeleted()) {
+            throw new com.example.cns.exception.InvalidOperationException("Cannot edit a DELETED app");
+        }
+
+        if (request.getName() == null && request.getStatus() == null) {
+            throw new IllegalArgumentException("No fields to update");
+        }
+
+        if (request.getName() != null) {
+            if (request.getName().trim().isEmpty()) {
+                throw new IllegalArgumentException("App name cannot be empty");
+            }
+            if (appRepository.existsByName(request.getName()) && !app.getName().equals(request.getName())) {
+                throw new com.example.cns.exception.DuplicateResourceException(
+                        "App with name '" + request.getName() + "' already exists.");
+            }
+            app.setName(request.getName());
+        }
+
+        if (request.getStatus() != null) {
+            String newStatus = request.getStatus().toUpperCase();
+            if (!newStatus.equals("ACTIVE") && !newStatus.equals("ARCHIVED") && !newStatus.equals("DELETED")) {
+                throw new IllegalArgumentException(
+                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
+            }
+
+            if (newStatus.equals(app.getStatus())) {
+                throw new com.example.cns.exception.InvalidOperationException("App is already in the requested state");
+            }
+
+            app.setStatus(newStatus);
+            app.setActive("ACTIVE".equalsIgnoreCase(newStatus));
+        }
+
+        app.setUpdatedAt(LocalDateTime.now());
+        app.setUpdatedBy(getCurrentAuditor());
+
+        App savedApp = appRepository.save(app);
+
+        log.info("App ID: {} updated successfully.", id);
+        return mapToDto(savedApp);
+    }
+
     public void deleteApp(Long id) {
         log.info("Attempting to delete app with ID: {}", id);
         App app = appRepository.findById(id)
@@ -84,52 +135,6 @@ public class AppService {
 
         appRepository.save(app);
         log.info("App '{}' (ID: {}) has been successfully deleted. UpdatedBy: {}", app.getName(), id,
-                app.getUpdatedBy());
-    }
-
-    public void archiveApp(Long id) {
-        log.info("Attempting to archive app with ID: {}", id);
-
-        App app = appRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.error("Archive failed: App with ID {} not found", id);
-                    return new ResourceNotFoundException("Cannot archive: App not found.");
-                });
-
-        if (app.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot archive a DELETED app.");
-        }
-
-        if ("ARCHIVED".equalsIgnoreCase(app.getStatus())) {
-            log.warn("App with ID {} is already archived.", id);
-            return;
-        }
-
-        app.setStatus("ARCHIVED");
-        app.setActive(false);
-        app.setUpdatedAt(LocalDateTime.now());
-        app.setUpdatedBy(getCurrentAuditor());
-        appRepository.save(app);
-
-        log.info("App '{}' (ID: {}) has been successfully archived. UpdatedBy: {}", app.getName(), id,
-                app.getUpdatedBy());
-    }
-
-    public void unarchiveApp(Long id) {
-        log.info("Attempting to unarchive app with ID: {}", id);
-        App app = appRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("App not found with id: " + id));
-
-        if (app.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot unarchive a DELETED app.");
-        }
-
-        app.setStatus("ACTIVE");
-        app.setActive(true);
-        app.setUpdatedAt(LocalDateTime.now());
-        app.setUpdatedBy(getCurrentAuditor());
-        appRepository.save(app);
-        log.info("App '{}' (ID: {}) has been successfully unarchived. UpdatedBy: {}", app.getName(), id,
                 app.getUpdatedBy());
     }
 

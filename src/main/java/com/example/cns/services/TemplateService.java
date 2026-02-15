@@ -5,6 +5,7 @@ import com.example.cns.dto.TemplateResponseDto;
 import com.example.cns.entities.App;
 import com.example.cns.entities.Template;
 import com.example.cns.entities.TemplateTag;
+import com.example.cns.exception.InvalidOperationException;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
 import com.example.cns.repositories.TemplateRepository;
@@ -66,12 +67,13 @@ public class TemplateService {
                 .name(request.getName())
                 .subject(request.getSubject())
                 .htmlBody(request.getHtmlBody())
-                .status(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE")
-                .isActive(request.getStatus() == null || "ACTIVE".equalsIgnoreCase(request.getStatus()))
+                .status("ACTIVE") // Always set to ACTIVE
+                .isActive(true) // Always set to true
                 .isDeleted(false)
-                .createdAt(now) // Manually set for immediate response
-                .createdBy(currentAuditor) // Manually set for immediate response
-                .updatedAt(now) // Manually set
+                .createdAt(now)
+                .createdBy(currentAuditor)
+                .updatedAt(null) // Set to null for new registration
+                .updatedBy(null) // Set to null for new registration
                 .build();
 
         Template savedTemplate = templateRepository.saveAndFlush(template);
@@ -97,7 +99,17 @@ public class TemplateService {
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
 
         if (template.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot edit a DELETED template");
+            throw new InvalidOperationException("Cannot edit a DELETED template");
+        }
+
+        // If template is archived, only allow status changes
+        if ("ARCHIVED".equalsIgnoreCase(template.getStatus())) {
+            if (request.getStatus() == null) {
+                throw new InvalidOperationException("Cannot edit properties of an ARCHIVED template. Only status can be changed.");
+            }
+            if (request.getName() != null || request.getSubject() != null || request.getHtmlBody() != null || request.getAppId() != null) {
+                throw new InvalidOperationException("Cannot edit properties of an ARCHIVED template. Only status can be changed.");
+            }
         }
 
         // BUG_40: Check if payload is empty
@@ -113,12 +125,12 @@ public class TemplateService {
                             "Application not found with ID: " + request.getAppId()));
 
             if (newApp.isDeleted()) {
-                throw new com.example.cns.exception.InvalidOperationException(
+                throw new InvalidOperationException(
                         "Cannot update template with a deleted application");
             }
 
             if ("ARCHIVED".equalsIgnoreCase(newApp.getStatus())) {
-                throw new com.example.cns.exception.InvalidOperationException(
+                throw new InvalidOperationException(
                         "Cannot update template with an archived application");
             }
 
@@ -156,6 +168,19 @@ public class TemplateService {
         }
         if (request.getStatus() != null) {
             String newStatus = request.getStatus().toUpperCase();
+            if (newStatus.equals("DELETED")) {
+                throw new InvalidOperationException(
+                        "Cannot change status to DELETED via update. Use the delete endpoint instead.");
+            }
+            if (!newStatus.equals("ACTIVE") && !newStatus.equals("ARCHIVED") && !newStatus.equals("DRAFT")) {
+                throw new IllegalArgumentException(
+                        "Invalid status value. Allowed values for update: ACTIVE, ARCHIVED, DRAFT");
+            }
+
+            if (newStatus.equals(template.getStatus())) {
+                throw new InvalidOperationException("Template is already in the requested status.");
+            }
+
             template.setStatus(newStatus);
             template.setActive("ACTIVE".equalsIgnoreCase(newStatus));
         }
@@ -179,25 +204,6 @@ public class TemplateService {
     }
 
     /**
-     * 3. ARCHIVE TEMPLATE
-     */
-    public void archiveTemplate(Long id) {
-        Template template = templateRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
-
-        if (template.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot archive a DELETED template");
-        }
-
-        template.setStatus("ARCHIVED");
-        template.setActive(false);
-        template.setUpdatedAt(LocalDateTime.now());
-        template.setUpdatedBy(getCurrentAuditor());
-        templateRepository.save(template);
-        log.info("Template ID: {} moved to ARCHIVED status. UpdatedBy: {}", id, template.getUpdatedBy());
-    }
-
-    /**
      * 4. DELETE TEMPLATE (Soft Delete)
      */
     public void deleteTemplate(Long id) {
@@ -206,7 +212,7 @@ public class TemplateService {
 
         if (template.isDeleted()) {
             log.warn("Delete failed: Template with ID {} is already deleted", id);
-            throw new com.example.cns.exception.InvalidOperationException("Template already deleted");
+            throw new InvalidOperationException("Template already deleted");
         }
 
         template.setDeleted(true);
@@ -226,7 +232,7 @@ public class TemplateService {
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
 
         if (template.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot activate a DELETED template");
+            throw new InvalidOperationException("Cannot activate a DELETED template");
         }
 
         template.setStatus("ACTIVE");
@@ -263,7 +269,7 @@ public class TemplateService {
                     .orElseThrow(() -> new ResourceNotFoundException("Application not found with ID: " + appId));
 
             if (app.isDeleted()) {
-                throw new com.example.cns.exception.InvalidOperationException(
+                throw new InvalidOperationException(
                         "Cannot filter templates for a deleted application");
             }
         }

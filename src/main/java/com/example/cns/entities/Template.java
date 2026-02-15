@@ -3,11 +3,9 @@ package com.example.cns.entities;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.annotation.CreatedBy;
-import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
@@ -49,14 +47,11 @@ public class Template {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    // updatedAt and updatedBy should be null on creation, only set on actual
-    // updates
-    @UpdateTimestamp
+    // These fields are now manually managed in the service layer
     private LocalDateTime updatedAt;
 
     @CreatedBy
     private String createdBy;
 
-    @LastModifiedBy
     private String updatedBy;
 }

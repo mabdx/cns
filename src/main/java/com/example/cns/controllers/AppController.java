@@ -39,11 +39,14 @@ public class AppController {
         return ResponseEntity.ok(appService.getAppById(id));
     }
 
-    @PatchMapping("/{id}/archive")
-    public ResponseEntity<java.util.Map<String, Object>> archiveApp(@PathVariable Long id) {
-        appService.archiveApp(id);
+    @PatchMapping("/{id}")
+    public ResponseEntity<java.util.Map<String, Object>> updateApp(
+            @PathVariable Long id,
+            @RequestBody AppRequestDto request) {
+        AppResponseDto app = appService.updateApp(id, request);
         java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("message", "App archived successfully");
+        response.put("message", "App updated successfully");
+        response.put("data", app);
         return ResponseEntity.ok(response);
     }
 
@@ -52,14 +55,6 @@ public class AppController {
         appService.deleteApp(id);
         java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "App deleted successfully");
-        return ResponseEntity.ok(response);
-    }
-
-    @PatchMapping("/{id}/unarchive")
-    public ResponseEntity<java.util.Map<String, Object>> unarchiveApp(@PathVariable Long id) {
-        appService.unarchiveApp(id);
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("message", "App unarchived successfully");
         return ResponseEntity.ok(response);
     }
 }

@@ -2,9 +2,15 @@ package com.example.cns.services;
 
 import com.example.cns.dto.NotificationRequestDto;
 import com.example.cns.dto.NotificationResponseDto;
-import com.example.cns.entities.*;
-import com.example.cns.repositories.*;
+import com.example.cns.entities.App;
+import com.example.cns.entities.Notification;
+import com.example.cns.entities.Template;
+import com.example.cns.entities.TemplateTag;
 import com.example.cns.exception.ResourceNotFoundException;
+import com.example.cns.repositories.AppRepository;
+import com.example.cns.repositories.NotificationRepository;
+import com.example.cns.repositories.TemplateRepository;
+import com.example.cns.repositories.TemplateTagRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
@@ -87,11 +93,15 @@ public class NotificationService {
                 });
 
         // 2.5 Ownership Check: Does template belong to this app?
-        if (!template.getApp().getId().equals(app.getId())) {
+        if (template.getApp() == null || !template.getApp().getId().equals(app.getId())) {
             log.error(
                     "Security Breach Attempt: App '{}' (ID: {}) tried to use Template '{}' (ID: {}) which belongs to App '{}' (ID: {})",
-                    app.getName(), app.getId(), template.getName(), template.getId(),
-                    template.getApp().getName(), template.getApp().getId());
+                    app != null ? app.getName() : "N/A",
+                    app != null ? app.getId() : "N/A",
+                    template != null ? template.getName() : "N/A",
+                    templateId,
+                    template != null && template.getApp() != null ? template.getApp().getName() : "N/A",
+                    template != null && template.getApp() != null ? template.getApp().getId() : "N/A");
             throw new SecurityException("Template ID " + templateId + " does not belong to this application.");
         }
 
@@ -218,51 +228,6 @@ public class NotificationService {
         }
     }
 
-    public void sendNotificationOld(NotificationRequestDto request) {
-        log.debug("Starting notification process for recipient: {}", request.getRecipient());
-
-        // We declare these outside the try block so we can use them in the 'catch'
-        // block
-        App app = null;
-        Template template = null;
-
-        try {
-            // 1. API Key Validation
-            app = appRepository.findByApiKey(request.getApiKey())
-                    .orElseThrow(() -> new SecurityException("Invalid API Key"));
-
-            // 2. Fetch Template
-            template = templateRepository.findById(request.getTemplateId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
-
-            // 3. INTEGRATION CHECK: Is template Active?
-            if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
-                throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
-            }
-
-            // 4. INTEGRATION CHECK: Strict Tag Validation
-            // This will now THROW an exception if something is missing
-            validateTags(template.getId(), request.getPlaceholders());
-
-            // 5. Logic: Replace {{ }} with real values
-            String finalBody = resolve(template.getHtmlBody(), request.getPlaceholders());
-
-            // 6. SUCCESS: Save as SENT
-            saveToHistory(app, template, request, finalBody, "SENT");
-            log.info("Notification successfully logged as SENT. ID: {}", template.getId());
-
-        } catch (Exception e) {
-            // 7. FAILURE: Save as FAILED (The Health Requirement)
-            log.error("Notification FAILED: {}", e.getMessage());
-
-            // We can only save to DB if we successfully found the App and Template first.
-            // If the App/Template was null (invalid key), we just throw the error.
-            if (app != null && template != null) {
-                saveToHistory(app, template, request, "ERROR: " + e.getMessage(), "FAILED");
-            }
-            throw e; // Re-throw so the Controller knows to return an error code
-        }
-    }
 
     // Helper method to handle both SENT and FAILED saves
     private void saveToHistory(App app, Template template, NotificationRequestDto request, String bodyContent,
@@ -315,10 +280,14 @@ public class NotificationService {
     public Map<String, Object> sendBulkNotifications(com.example.cns.dto.NotificationBulkRequestDto request) {
         if (request.getRecipients() == null || request.getRecipients().isEmpty()) {
             log.warn("Empty bulk recipients map provided");
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", "At least one recipient must be provided");
-            return errorResponse;
+            throw new IllegalArgumentException("At least one recipient must be provided");
+        }
+
+        // Check for duplicate emails
+        List<String> recipientEmails = new ArrayList<>(request.getRecipients().keySet());
+        Set<String> uniqueEmails = new HashSet<>(recipientEmails);
+        if (uniqueEmails.size() < recipientEmails.size()) {
+            throw new IllegalArgumentException("Duplicate emails are not allowed in bulk requests.");
         }
 
         log.info("Starting personalized bulk notification process for {} recipients", request.getRecipients().size());
@@ -340,11 +309,15 @@ public class NotificationService {
                             "Template not found with ID: " + request.getTemplateId()));
 
             // 2.5 Ownership Check: Does template belong to this app?
-            if (!template.getApp().getId().equals(app.getId())) {
+            if (template.getApp() == null || !template.getApp().getId().equals(app.getId())) {
                 log.error(
                         "Security Breach Attempt (Bulk): App '{}' (ID: {}) tried to use Template '{}' (ID: {}) which belongs to App '{}' (ID: {})",
-                        app.getName(), app.getId(), template.getName(), template.getId(),
-                        template.getApp().getName(), template.getApp().getId());
+                        app != null ? app.getName() : "N/A",
+                        app != null ? app.getId() : "N/A",
+                        template != null ? template.getName() : "N/A",
+                        request.getTemplateId(),
+                        template != null && template.getApp() != null ? template.getApp().getName() : "N/A",
+                        template != null && template.getApp() != null ? template.getApp().getId() : "N/A");
                 throw new SecurityException(
                         "Template ID " + request.getTemplateId() + " does not belong to this application.");
             }
@@ -354,23 +327,9 @@ public class NotificationService {
                 throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
             }
 
-            // 4. Validate Global Tags (if any)
-            if (request.getGlobalPlaceholders() != null) {
-                validateTags(template.getId(), request.getGlobalPlaceholders());
-            }
-
-            // 5. Process each recipient individually
-            Set<String> processedEmails = new HashSet<>();
-
+            // 4. Process each recipient individually
             for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
                 String recipientEmail = entry.getKey();
-
-                if (processedEmails.contains(recipientEmail)) {
-                    log.warn("Skipping duplicate email in bulk request: {}", recipientEmail);
-                    continue;
-                }
-                processedEmails.add(recipientEmail);
-
                 Map<String, String> personalizedPlaceholders = entry.getValue();
 
                 try {
@@ -450,11 +409,11 @@ public class NotificationService {
         return response;
     }
 
-    public Page<NotificationResponseDto> getAllNotifications(Long templateId, String recipientEmail, String status,
+    public Page<NotificationResponseDto> getAllNotifications(Long appId, Long templateId, String recipientEmail, String status,
             Pageable pageable) {
-        log.debug("Fetching notifications with filters - TemplateId: {}, Email: {}, Status: {}", templateId,
+        log.debug("Fetching notifications with filters - AppId: {}, TemplateId: {}, Email: {}, Status: {}", appId, templateId,
                 recipientEmail, status);
-        Page<Notification> notifications = notificationRepository.findByFilters(templateId, recipientEmail, status,
+        Page<Notification> notifications = notificationRepository.findByFilters(appId, templateId, recipientEmail, status,
                 pageable);
         return notifications.map(this::convertToResponseDto);
     }
@@ -462,14 +421,14 @@ public class NotificationService {
     private NotificationResponseDto convertToResponseDto(Notification notification) {
         return NotificationResponseDto.builder()
                 .id(notification.getId())
-                .templateId(notification.getTemplate().getId())
+                .templateId(notification.getTemplate() != null ? notification.getTemplate().getId() : null)
                 .recipientEmail(notification.getRecipientEmail())
                 .subject(notification.getSubject())
                 .body(notification.getBody())
                 .status(notification.getStatus())
                 .retryCount(notification.getRetryCount())
                 .createdAt(notification.getCreatedAt())
-                .appName(notification.getApp().getName())
+                .appName(notification.getApp() != null ? notification.getApp().getName() : "N/A")
                 .build();
     }
 }

@@ -50,11 +50,12 @@ public class NotificationController {
 
     @GetMapping("/logs")
     public ResponseEntity<Page<NotificationResponseDto>> getAllNotifications(
+            @RequestParam(required = false) Long appId,
             @RequestParam(required = false) Long templateId,
             @RequestParam(required = false) String recipientEmail,
             @RequestParam(required = false) String status,
             @PageableDefault(size = 10, sort = "id") Pageable pageable) {
         log.info("Fetching filtered notification logs");
-        return ResponseEntity.ok(notificationService.getAllNotifications(templateId, recipientEmail, status, pageable));
+        return ResponseEntity.ok(notificationService.getAllNotifications(appId, templateId, recipientEmail, status, pageable));
     }
 }
