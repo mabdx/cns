@@ -4,6 +4,7 @@ import com.example.cns.dto.AppRequestDto;
 import com.example.cns.dto.AppResponseDto;
 import com.example.cns.services.AppService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class AppController {
     public ResponseEntity<org.springframework.data.domain.Page<AppResponseDto>> getAllApps(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String name,
-            @org.springframework.data.web.PageableDefault(size = 10, sort = "id") org.springframework.data.domain.Pageable pageable) {
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
         return ResponseEntity.ok(appService.getAllApps(id, name, pageable));
     }
 

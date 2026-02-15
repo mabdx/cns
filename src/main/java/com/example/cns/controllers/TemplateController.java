@@ -6,6 +6,7 @@ import com.example.cns.services.TemplateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -69,7 +70,7 @@ public class TemplateController {
             @RequestParam(required = false) Long appId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String name,
-            @org.springframework.data.web.PageableDefault(size = 10, sort = "id") org.springframework.data.domain.Pageable pageable) {
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
         log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}", appId, status, name);
         return ResponseEntity.ok(templateService.getTemplates(appId, status, name, pageable));
     }
