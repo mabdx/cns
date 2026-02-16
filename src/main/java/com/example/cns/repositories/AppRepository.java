@@ -1,7 +1,11 @@
 package com.example.cns.repositories;
 
 import com.example.cns.entities.App;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -10,16 +14,16 @@ public interface AppRepository extends JpaRepository<App, Long> {
 
     boolean existsByName(String name);
 
-    // Pagination support
-    org.springframework.data.domain.Page<App> findAll(org.springframework.data.domain.Pageable pageable);
+    Optional<App> findByName(String name);
 
     // Filtering with pagination
-    @org.springframework.data.jpa.repository.Query("SELECT a FROM App a WHERE " +
+    @Query("SELECT a FROM App a WHERE " +
             "(:id IS NULL OR a.id = :id) AND " +
             "(:name IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
-            "a.isDeleted = false")
-    org.springframework.data.domain.Page<App> findByFilters(
-            @org.springframework.data.repository.query.Param("id") Long id,
-            @org.springframework.data.repository.query.Param("name") String name,
-            org.springframework.data.domain.Pageable pageable);
+            "(:status IS NULL AND a.isDeleted = false OR LOWER(a.status) = LOWER(:status))")
+    Page<App> findByFilters(
+            @Param("id") Long id,
+            @Param("name") String name,
+            @Param("status") String status,
+            Pageable pageable);
 }

@@ -111,8 +111,7 @@ public class NotificationService {
         }
 
         if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
-            log.error("Template is not ACTIVE. Current status: {}", template.getStatus());
-            throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
+            throw new IllegalStateException("Template is not active. Current status: " + template.getStatus());
         }
 
         // 4. INTEGRATION CHECK: Strict Tag Validation - throws 400 if tags missing
@@ -324,7 +323,7 @@ public class NotificationService {
 
             // 3. INTEGRATION CHECK: Is template Active?
             if (!"ACTIVE".equalsIgnoreCase(template.getStatus())) {
-                throw new IllegalStateException("Template is " + template.getStatus() + ", cannot send.");
+                throw new IllegalStateException("Template is not active. Current status: " + template.getStatus());
             }
 
             // 4. Process each recipient individually

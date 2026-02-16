@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -49,9 +50,8 @@ public class TemplateService {
                     return new ResourceNotFoundException("App not found");
                 });
 
-        if (app.isDeleted() || !"ACTIVE".equalsIgnoreCase(app.getStatus())) {
-            throw new com.example.cns.exception.InvalidOperationException(
-                    "Cannot create template for a DELETED or non-ACTIVE application.");
+        if (!app.isActive()) {
+            throw new InvalidOperationException("Cannot create template for an inactive application.");
         }
 
         if (templateRepository.existsByAppIdAndName(request.getAppId(), request.getName())) {
@@ -67,13 +67,13 @@ public class TemplateService {
                 .name(request.getName())
                 .subject(request.getSubject())
                 .htmlBody(request.getHtmlBody())
-                .status("ACTIVE") // Always set to ACTIVE
-                .isActive(true) // Always set to true
+                .status("ACTIVE")
+                .isActive(true)
                 .isDeleted(false)
                 .createdAt(now)
                 .createdBy(currentAuditor)
-                .updatedAt(null) // Set to null for new registration
-                .updatedBy(null) // Set to null for new registration
+                .updatedAt(null)
+                .updatedBy(null)
                 .build();
 
         Template savedTemplate = templateRepository.saveAndFlush(template);
@@ -102,7 +102,6 @@ public class TemplateService {
             throw new InvalidOperationException("Cannot edit a DELETED template");
         }
 
-        // If template is archived, only allow status changes
         if ("ARCHIVED".equalsIgnoreCase(template.getStatus())) {
             if (request.getStatus() == null) {
                 throw new InvalidOperationException("Cannot edit properties of an ARCHIVED template. Only status can be changed.");
@@ -112,7 +111,6 @@ public class TemplateService {
             }
         }
 
-        // BUG_40: Check if payload is empty
         if (request.getName() == null && request.getSubject() == null &&
                 request.getHtmlBody() == null && request.getStatus() == null && request.getAppId() == null) {
             throw new IllegalArgumentException("No fields to update");
@@ -187,7 +185,17 @@ public class TemplateService {
             }
 
             template.setStatus(newStatus);
-            template.setActive("ACTIVE".equalsIgnoreCase(newStatus));
+            switch (newStatus) {
+                case "ACTIVE":
+                    template.setActive(true);
+                    template.setDeleted(false);
+                    break;
+                case "ARCHIVED":
+                case "DRAFT":
+                    template.setActive(false);
+                    template.setDeleted(false);
+                    break;
+            }
         }
 
         // Set update timestamp manually since we removed @UpdateTimestamp
@@ -249,7 +257,6 @@ public class TemplateService {
             String name,
             org.springframework.data.domain.Pageable pageable) {
 
-        // Validate appId if provided
         if (appId != null) {
             App app = appRepository.findById(appId)
                     .orElseThrow(() -> new ResourceNotFoundException("Application not found with ID: " + appId));
@@ -260,15 +267,12 @@ public class TemplateService {
             }
         }
 
-        // Validate status if provided
         if (status != null && !status.trim().isEmpty()) {
             String upperStatus = status.toUpperCase();
-            if (!upperStatus.equals("ACTIVE") && !upperStatus.equals("ARCHIVED") &&
-                    !upperStatus.equals("DRAFT") && !upperStatus.equals("DELETED")) {
+            if (!Set.of("ACTIVE", "ARCHIVED", "DRAFT", "DELETED").contains(upperStatus)) {
                 throw new IllegalArgumentException(
                         "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT, DELETED");
             }
-            status = upperStatus;
         }
 
         org.springframework.data.domain.Page<Template> templates = templateRepository.findByAppIdAndStatus(appId,
@@ -302,7 +306,6 @@ public class TemplateService {
      */
     private List<String> extractAndSaveTags(Template template, String html) {
         List<String> tagsFound = new ArrayList<>();
-        // Regex to find anything inside {{ }}
         Pattern pattern = Pattern.compile("\\{\\{(.+?)\\}\\}");
         Matcher matcher = pattern.matcher(html);
 

@@ -9,6 +9,8 @@ import com.example.cns.repositories.AppRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import org.springframework.security.core.Authentication;
@@ -16,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import java.util.Optional;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
@@ -53,11 +56,20 @@ public class AppService {
         return mapToDto(savedApp);
     }
 
-    public org.springframework.data.domain.Page<AppResponseDto> getAllApps(
+    public Page<AppResponseDto> getAllApps(
             Long id,
             String name,
-            org.springframework.data.domain.Pageable pageable) {
-        org.springframework.data.domain.Page<App> apps = appRepository.findByFilters(id, name, pageable);
+            String status,
+            Pageable pageable) {
+        
+        if (status != null && !status.trim().isEmpty()) {
+            String upperStatus = status.toUpperCase();
+            if (!Set.of("ACTIVE", "ARCHIVED", "DELETED").contains(upperStatus)) {
+                throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
+            }
+        }
+        
+        Page<App> apps = appRepository.findByFilters(id, name, status, pageable);
         return apps.map(this::mapToDto);
     }
 
@@ -89,18 +101,19 @@ public class AppService {
             if (request.getName().equals(app.getName())) {
                 throw new InvalidOperationException("The new name is the same as the current name.");
             }
-            if (appRepository.existsByName(request.getName())) {
-                throw new com.example.cns.exception.DuplicateResourceException(
-                        "App with name '" + request.getName() + "' already exists.");
-            }
+            appRepository.findByName(request.getName()).ifPresent(existingApp -> {
+                if (!existingApp.getId().equals(app.getId())) {
+                    throw new com.example.cns.exception.DuplicateResourceException(
+                            "App with name '" + request.getName() + "' already exists.");
+                }
+            });
             app.setName(request.getName());
         }
 
         if (request.getStatus() != null) {
             String newStatus = request.getStatus().toUpperCase();
-            if (!newStatus.equals("ACTIVE") && !newStatus.equals("ARCHIVED") && !newStatus.equals("DELETED")) {
-                throw new IllegalArgumentException(
-                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
+            if (!Set.of("ACTIVE", "ARCHIVED", "DELETED").contains(newStatus)) {
+                throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
             }
 
             if (newStatus.equals(app.getStatus())) {
@@ -108,7 +121,20 @@ public class AppService {
             }
 
             app.setStatus(newStatus);
-            app.setActive("ACTIVE".equalsIgnoreCase(newStatus));
+            switch (newStatus) {
+                case "ACTIVE":
+                    app.setActive(true);
+                    app.setDeleted(false);
+                    break;
+                case "ARCHIVED":
+                    app.setActive(false);
+                    app.setDeleted(false);
+                    break;
+                case "DELETED":
+                    app.setActive(false);
+                    app.setDeleted(true);
+                    break;
+            }
         }
 
         app.setUpdatedAt(LocalDateTime.now());
