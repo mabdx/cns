@@ -287,16 +287,6 @@ public class TemplateService {
         });
     }
 
-    /**
-     * 6. SAVE AS DRAFT
-     * Helper method.
-     */
-    public TemplateResponseDto saveAsDraft(TemplateRequestDto request) {
-        log.info("Saving template as DRAFT for app: {}", request.getAppId());
-        request.setStatus("DRAFT");
-        return createTemplate(request);
-    }
-
     // ==========================================
     // PRIVATE HELPER METHODS (The Core Logic)
     // ==========================================

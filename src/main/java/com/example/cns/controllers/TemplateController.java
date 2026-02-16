@@ -76,10 +76,4 @@ public class TemplateController {
         log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}", appId, status, name);
         return ResponseEntity.ok(templateService.getTemplates(appId, status, name, pageable));
     }
-
-    @PostMapping("/draft")
-    public ResponseEntity<TemplateResponseDto> saveDraft(@Valid @RequestBody TemplateRequestDto request) {
-        log.info("Received request to save draft: {}", request.getName());
-        return ResponseEntity.ok(templateService.saveAsDraft(request));
-    }
 }
