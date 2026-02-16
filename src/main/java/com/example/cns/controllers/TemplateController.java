@@ -75,8 +75,15 @@ public class TemplateController {
             }
         }
 
-        if (pageable.getPageNumber() < 0 || pageable.getPageSize() < 1) {
-            throw new IllegalArgumentException("Page number must not be less than zero and size must not be less than one.");
+        if (allParams.containsKey("page")) {
+            if (Integer.parseInt(allParams.get("page")) < 0) {
+                throw new IllegalArgumentException("Page number must not be less than zero.");
+            }
+        }
+        if (allParams.containsKey("size")) {
+            if (Integer.parseInt(allParams.get("size")) < 1) {
+                throw new IllegalArgumentException("Page size must not be less than one.");
+            }
         }
 
         log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}", appId, status, name);
