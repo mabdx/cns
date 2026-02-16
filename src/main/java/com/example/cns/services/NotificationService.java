@@ -1,5 +1,7 @@
 package com.example.cns.services;
 
+import com.example.cns.dto.NotificationBulkRequestDto;
+import com.example.cns.dto.NotificationHealthDto;
 import com.example.cns.dto.NotificationRequestDto;
 import com.example.cns.dto.NotificationResponseDto;
 import com.example.cns.entities.App;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -55,6 +58,17 @@ public class NotificationService {
         }
 
         // Now process all recipients (whether 1 or many)
+        // Ensure unique recipients (No repeated users)
+        // Check for duplicates before filtering
+        List<String> validRecipients = recipientList.stream()
+                .filter(Objects::nonNull)
+                .filter(r -> !r.isBlank())
+                .toList();
+
+        if (validRecipients.stream().distinct().count() < validRecipients.size()) {
+            throw new IllegalArgumentException("Duplicate emails are not allowed in the request.");
+        }
+
         // Ensure unique recipients (No repeated users)
         List<String> uniqueRecipients = recipientList.stream()
                 .filter(Objects::nonNull)
@@ -227,7 +241,6 @@ public class NotificationService {
         }
     }
 
-
     // Helper method to handle both SENT and FAILED saves
     private void saveToHistory(App app, Template template, NotificationRequestDto request, String bodyContent,
             String status) {
@@ -326,6 +339,18 @@ public class NotificationService {
                 throw new IllegalStateException("Template is not active. Current status: " + template.getStatus());
             }
 
+            // Pre-validation: Check all recipients for missing params BEFORE sending any
+            for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
+                Map<String, String> mergedPlaceholders = new HashMap<>();
+                if (request.getGlobalPlaceholders() != null) {
+                    mergedPlaceholders.putAll(request.getGlobalPlaceholders());
+                }
+                if (entry.getValue() != null) {
+                    mergedPlaceholders.putAll(entry.getValue());
+                }
+                validateTags(template.getId(), mergedPlaceholders);
+            }
+
             // 4. Process each recipient individually
             for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
                 String recipientEmail = entry.getKey();
@@ -408,13 +433,43 @@ public class NotificationService {
         return response;
     }
 
-    public Page<NotificationResponseDto> getAllNotifications(Long appId, Long templateId, String recipientEmail, String status,
+    public Page<NotificationResponseDto> getAllNotifications(Long appId, Long templateId, String recipientEmail,
+            String status,
             Pageable pageable) {
-        log.debug("Fetching notifications with filters - AppId: {}, TemplateId: {}, Email: {}, Status: {}", appId, templateId,
+        log.debug("Fetching notifications with filters - AppId: {}, TemplateId: {}, Email: {}, Status: {}", appId,
+                templateId,
                 recipientEmail, status);
-        Page<Notification> notifications = notificationRepository.findByFilters(appId, templateId, recipientEmail, status,
+
+        if (templateId != null && !templateRepository.existsById(templateId)) {
+            throw new ResourceNotFoundException("Template not found with ID: " + templateId);
+        }
+
+        if (status != null && !status.isBlank()) {
+            List<String> validStatuses = List.of("SENT", "FAILED");
+            if (!validStatuses.contains(status.toUpperCase())) {
+                throw new IllegalArgumentException("Invalid status: " + status + ". Allowed values: SENT, FAILED");
+            }
+        }
+
+        Page<Notification> notifications = notificationRepository.findByFilters(appId, templateId, recipientEmail,
+                status,
                 pageable);
         return notifications.map(this::convertToResponseDto);
+    }
+
+    public NotificationHealthDto getHealthSummary() {
+        long successful = notificationRepository.countByStatus("SENT");
+        long failed = notificationRepository.countByStatus("FAILED");
+        long total = successful + failed;
+
+        if (total == 0) {
+            return new NotificationHealthDto(0, 0, "-");
+        }
+
+        double percentage = ((double) successful / total) * 100.0;
+        String healthPercentage = new DecimalFormat("#.##").format(percentage) + "%";
+
+        return new NotificationHealthDto(successful, failed, healthPercentage);
     }
 
     private NotificationResponseDto convertToResponseDto(Notification notification) {

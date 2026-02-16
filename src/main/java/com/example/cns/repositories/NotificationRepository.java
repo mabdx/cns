@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    long countByStatus(String status);
+
     @Query("SELECT n FROM Notification n WHERE " +
             "(:appId IS NULL OR n.app.id = :appId) AND " +
             "(:templateId IS NULL OR n.template.id = :templateId) AND " +

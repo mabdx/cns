@@ -1,20 +1,21 @@
 package com.example.cns.controllers;
 
-import com.example.cns.dto.NotificationRequestDto;
 import com.example.cns.dto.NotificationBulkRequestDto;
+import com.example.cns.dto.NotificationHealthDto;
+import com.example.cns.dto.NotificationRequestDto;
 import com.example.cns.dto.NotificationResponseDto;
 import com.example.cns.services.NotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 
 @Slf4j
 @RestController
@@ -54,8 +55,30 @@ public class NotificationController {
             @RequestParam(required = false) Long templateId,
             @RequestParam(required = false) String recipientEmail,
             @RequestParam(required = false) String status,
-            @PageableDefault(size = 10, sort = "id") Pageable pageable) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+
+        if (page < 0) {
+            throw new IllegalArgumentException("Page index must not be less than zero!");
+        }
+        if (size <= 0) {
+            throw new IllegalArgumentException("Page size must not be less than one!");
+        }
+
         log.info("Fetching filtered notification logs");
-        return ResponseEntity.ok(notificationService.getAllNotifications(appId, templateId, recipientEmail, status, pageable));
+        org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort
+                .by(org.springframework.data.domain.Sort.Direction.fromString(sortDir), sortBy);
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, sort);
+
+        return ResponseEntity.ok(
+                notificationService.getAllNotifications(appId, templateId, recipientEmail, status, pageable));
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<NotificationHealthDto> getHealthSummary() {
+        log.info("Received request for notification health summary");
+        return ResponseEntity.ok(notificationService.getHealthSummary());
     }
 }
