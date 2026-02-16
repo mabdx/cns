@@ -140,28 +140,33 @@ public class TemplateService {
         boolean contentChanged = false;
 
         if (request.getName() != null) {
-            // BUG_41: Check if name is empty
             if (request.getName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Template name cannot be empty");
             }
-
-            if (templateRepository.existsByAppIdAndName(template.getApp().getId(), request.getName())
-                    && !template.getName().equals(request.getName())) {
+            if (request.getName().equals(template.getName())) {
+                throw new InvalidOperationException("The new name is the same as the current name.");
+            }
+            if (templateRepository.existsByAppIdAndName(template.getApp().getId(), request.getName())) {
                 throw new com.example.cns.exception.DuplicateResourceException(
                         "Template with name '" + request.getName() + "' already exists.");
             }
             template.setName(request.getName());
         }
         if (request.getSubject() != null) {
-            // BUG_41: Check if subject is empty
             if (request.getSubject().trim().isEmpty()) {
                 throw new IllegalArgumentException("Subject cannot be empty");
+            }
+            if (request.getSubject().equals(template.getSubject())) {
+                throw new InvalidOperationException("The new subject is the same as the current subject.");
             }
             template.setSubject(request.getSubject());
         }
         if (request.getHtmlBody() != null) {
             if (request.getHtmlBody().trim().isEmpty()) {
                 throw new IllegalArgumentException("HTML Body cannot be empty if provided");
+            }
+            if (request.getHtmlBody().equals(template.getHtmlBody())) {
+                throw new InvalidOperationException("The new HTML body is the same as the current one.");
             }
             template.setHtmlBody(request.getHtmlBody());
             contentChanged = true;
@@ -222,25 +227,6 @@ public class TemplateService {
         template.setUpdatedBy(getCurrentAuditor());
         templateRepository.save(template);
         log.info("Template ID: {} has been soft-deleted. UpdatedBy: {}", id, template.getUpdatedBy());
-    }
-
-    /**
-     * 4b. ACTIVATE TEMPLATE
-     */
-    public void activateTemplate(Long id) {
-        Template template = templateRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
-
-        if (template.isDeleted()) {
-            throw new InvalidOperationException("Cannot activate a DELETED template");
-        }
-
-        template.setStatus("ACTIVE");
-        template.setActive(true);
-        template.setUpdatedAt(LocalDateTime.now());
-        template.setUpdatedBy(getCurrentAuditor());
-        templateRepository.save(template);
-        log.info("Template ID: {} activated (Unarchived/Undrafted). UpdatedBy: {}", id, template.getUpdatedBy());
     }
 
     private String getCurrentAuditor() {

@@ -3,6 +3,7 @@ package com.example.cns.services;
 import com.example.cns.dto.AppRequestDto;
 import com.example.cns.dto.AppResponseDto;
 import com.example.cns.entities.App;
+import com.example.cns.exception.InvalidOperationException;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
 import jakarta.validation.Valid;
@@ -74,7 +75,7 @@ public class AppService {
                 .orElseThrow(() -> new ResourceNotFoundException("App not found"));
 
         if (app.isDeleted()) {
-            throw new com.example.cns.exception.InvalidOperationException("Cannot edit a DELETED app");
+            throw new InvalidOperationException("Cannot edit a DELETED app");
         }
 
         if (request.getName() == null && request.getStatus() == null) {
@@ -85,7 +86,10 @@ public class AppService {
             if (request.getName().trim().isEmpty()) {
                 throw new IllegalArgumentException("App name cannot be empty");
             }
-            if (appRepository.existsByName(request.getName()) && !app.getName().equals(request.getName())) {
+            if (request.getName().equals(app.getName())) {
+                throw new InvalidOperationException("The new name is the same as the current name.");
+            }
+            if (appRepository.existsByName(request.getName())) {
                 throw new com.example.cns.exception.DuplicateResourceException(
                         "App with name '" + request.getName() + "' already exists.");
             }
@@ -100,7 +104,7 @@ public class AppService {
             }
 
             if (newStatus.equals(app.getStatus())) {
-                throw new com.example.cns.exception.InvalidOperationException("App is already in the requested state");
+                throw new InvalidOperationException("App is already in the requested state");
             }
 
             app.setStatus(newStatus);
@@ -123,7 +127,7 @@ public class AppService {
 
         if (app.isDeleted()) {
             log.warn("Delete failed: Application with ID {} is already deleted", id);
-            throw new com.example.cns.exception.InvalidOperationException("App already deleted");
+            throw new InvalidOperationException("App already deleted");
         }
 
         app.setDeleted(true);

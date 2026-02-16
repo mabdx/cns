@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/apps")
@@ -31,7 +32,16 @@ public class AppController {
     public ResponseEntity<org.springframework.data.domain.Page<AppResponseDto>> getAllApps(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String name,
+            @RequestParam java.util.Map<String, String> allParams,
             @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+        
+        Set<String> allowedParams = Set.of("id", "name", "page", "size", "sort");
+        for (String param : allParams.keySet()) {
+            if (!allowedParams.contains(param)) {
+                throw new IllegalArgumentException("Invalid filter parameter: " + param);
+            }
+        }
+
         return ResponseEntity.ok(appService.getAllApps(id, name, pageable));
     }
 
