@@ -4,7 +4,9 @@ import com.example.cns.dto.AppRequestDto;
 import com.example.cns.dto.AppResponseDto;
 import com.example.cns.services.AppService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +28,7 @@ public class AppController {
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "Application created successfully");
         response.put("data", app);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
@@ -35,13 +37,17 @@ public class AppController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String status,
             @RequestParam Map<String, String> allParams,
-            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         Set<String> allowedParams = Set.of("id", "name", "status", "page", "size", "sort");
         for (String param : allParams.keySet()) {
             if (!allowedParams.contains(param)) {
                 throw new IllegalArgumentException("Invalid filter parameter: " + param);
             }
+        }
+
+        if (pageable.getPageNumber() < 0 || pageable.getPageSize() < 1) {
+            throw new IllegalArgumentException("Page number must not be less than zero and size must not be less than one.");
         }
 
         return ResponseEntity.ok(appService.getAllApps(id, name, status, pageable));

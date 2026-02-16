@@ -12,6 +12,8 @@ import com.example.cns.repositories.TemplateRepository;
 import com.example.cns.repositories.TemplateTagRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +61,8 @@ public class TemplateService {
                     "Template with name '" + request.getName() + "' already exists for this app.");
         }
 
+        String safeHtml = processAndValidateHtml(request.getHtmlBody());
+
         String currentAuditor = getCurrentAuditor();
         LocalDateTime now = LocalDateTime.now();
 
@@ -66,7 +70,7 @@ public class TemplateService {
                 .app(app)
                 .name(request.getName())
                 .subject(request.getSubject())
-                .htmlBody(request.getHtmlBody())
+                .htmlBody(safeHtml)
                 .status("ACTIVE")
                 .isActive(true)
                 .isDeleted(false)
@@ -78,8 +82,7 @@ public class TemplateService {
 
         Template savedTemplate = templateRepository.saveAndFlush(template);
 
-        // Logic: Scan HTML for {{tags}} and save to DB
-        List<String> extractedTags = extractAndSaveTags(savedTemplate, request.getHtmlBody());
+        List<String> extractedTags = extractAndSaveTags(savedTemplate, safeHtml);
 
         log.info("Template '{}' (ID: {}) created successfully with {} tags.",
                 savedTemplate.getName(), savedTemplate.getId(), extractedTags.size());
@@ -160,13 +163,11 @@ public class TemplateService {
             template.setSubject(request.getSubject());
         }
         if (request.getHtmlBody() != null) {
-            if (request.getHtmlBody().trim().isEmpty()) {
-                throw new IllegalArgumentException("HTML Body cannot be empty if provided");
-            }
-            if (request.getHtmlBody().equals(template.getHtmlBody())) {
+            String safeHtml = processAndValidateHtml(request.getHtmlBody());
+            if (safeHtml.equals(template.getHtmlBody())) {
                 throw new InvalidOperationException("The new HTML body is the same as the current one.");
             }
-            template.setHtmlBody(request.getHtmlBody());
+            template.setHtmlBody(safeHtml);
             contentChanged = true;
         }
         if (request.getStatus() != null) {
@@ -198,7 +199,6 @@ public class TemplateService {
             }
         }
 
-        // Set update timestamp manually since we removed @UpdateTimestamp
         template.setUpdatedAt(LocalDateTime.now());
         template.setUpdatedBy(getCurrentAuditor());
 
@@ -290,6 +290,23 @@ public class TemplateService {
     // ==========================================
     // PRIVATE HELPER METHODS (The Core Logic)
     // ==========================================
+
+    private String processAndValidateHtml(String html) {
+        if (html == null || html.trim().isEmpty()) {
+            throw new IllegalArgumentException("HTML Body cannot be empty");
+        }
+        // Check if the input is likely plain text
+        if (!html.contains("<") && !html.contains(">")) {
+            // Convert plain text to HTML, preserving line breaks
+            return "<p>" + html.replace("\n", "<br>") + "</p>";
+        } else {
+            // It seems to be HTML, so validate and sanitize it
+            if (!Jsoup.isValid(html, Safelist.basic())) {
+                throw new IllegalArgumentException("The provided HTML body is not well-formed.");
+            }
+            return Jsoup.clean(html, Safelist.basic());
+        }
+    }
 
     /**
      * Extracts strings inside {{ }} from HTML and saves them to the Tag Repository.
