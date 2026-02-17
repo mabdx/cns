@@ -295,10 +295,15 @@ public class NotificationService {
             throw new IllegalArgumentException("At least one recipient must be provided");
         }
 
-        // Check for duplicate emails
+        // Check for duplicate emails and validate format
         List<String> recipientEmails = request.getRecipients().stream()
                 .map(NotificationBulkRequestDto.BulkRecipient::getEmail)
+                .filter(email -> email != null && !email.isBlank())
                 .toList();
+
+        if (recipientEmails.isEmpty()) {
+            throw new IllegalArgumentException("No valid recipient emails provided.");
+        }
         Set<String> uniqueEmails = new HashSet<>(recipientEmails);
         if (uniqueEmails.size() < recipientEmails.size()) {
             throw new IllegalArgumentException("Duplicate emails are not allowed in bulk requests.");
@@ -356,6 +361,8 @@ public class NotificationService {
             // 4. Process each recipient individually
             for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
                 String recipientEmail = recipient.getEmail();
+                // (Null checks already performed in validation step above)
+
                 Map<String, String> personalizedPlaceholders = recipient.getPlaceholders();
 
                 try {

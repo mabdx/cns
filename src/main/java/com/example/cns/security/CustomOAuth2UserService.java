@@ -22,6 +22,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         log.info("Loading user from OAuth2 provider");
-        return super.loadUser(userRequest);
+        OAuth2User user = super.loadUser(userRequest);
+
+        String email = user.getAttribute("email");
+        if (email == null || !email.endsWith("@gosaas.ai")) {
+            log.error("OAuth2 Login Failed: Unauthorized email domain: {}", email);
+            throw new OAuth2AuthenticationException("Only @gosaas.ai emails are allowed.");
+        }
+
+        return user;
     }
 }
