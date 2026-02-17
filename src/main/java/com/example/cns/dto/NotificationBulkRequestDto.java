@@ -15,7 +15,16 @@ public class NotificationBulkRequestDto {
     private Long templateId;
 
     @jakarta.validation.constraints.NotEmpty(message = "Recipients list cannot be empty")
-    private Map<String, Map<String, String>> recipients; // Email -> Personalized Placeholders
+    private List<BulkRecipient> recipients; // List of recipients for bulk sending
 
     private Map<String, String> globalPlaceholders; // Shared tags
+
+    @Data
+    public static class BulkRecipient {
+        @jakarta.validation.constraints.Email(message = "Invalid email format")
+        @jakarta.validation.constraints.NotBlank(message = "Email is mandatory")
+        private String email;
+
+        private Map<String, String> placeholders;
+    }
 }

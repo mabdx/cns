@@ -296,7 +296,9 @@ public class NotificationService {
         }
 
         // Check for duplicate emails
-        List<String> recipientEmails = new ArrayList<>(request.getRecipients().keySet());
+        List<String> recipientEmails = request.getRecipients().stream()
+                .map(NotificationBulkRequestDto.BulkRecipient::getEmail)
+                .toList();
         Set<String> uniqueEmails = new HashSet<>(recipientEmails);
         if (uniqueEmails.size() < recipientEmails.size()) {
             throw new IllegalArgumentException("Duplicate emails are not allowed in bulk requests.");
@@ -340,21 +342,21 @@ public class NotificationService {
             }
 
             // Pre-validation: Check all recipients for missing params BEFORE sending any
-            for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
+            for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
                 Map<String, String> mergedPlaceholders = new HashMap<>();
                 if (request.getGlobalPlaceholders() != null) {
                     mergedPlaceholders.putAll(request.getGlobalPlaceholders());
                 }
-                if (entry.getValue() != null) {
-                    mergedPlaceholders.putAll(entry.getValue());
+                if (recipient.getPlaceholders() != null) {
+                    mergedPlaceholders.putAll(recipient.getPlaceholders());
                 }
                 validateTags(template.getId(), mergedPlaceholders);
             }
 
             // 4. Process each recipient individually
-            for (Map.Entry<String, Map<String, String>> entry : request.getRecipients().entrySet()) {
-                String recipientEmail = entry.getKey();
-                Map<String, String> personalizedPlaceholders = entry.getValue();
+            for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
+                String recipientEmail = recipient.getEmail();
+                Map<String, String> personalizedPlaceholders = recipient.getPlaceholders();
 
                 try {
                     log.debug("Processing personalized notification for recipient: {}", recipientEmail);
@@ -413,7 +415,9 @@ public class NotificationService {
             log.error("Bulk personalized notification process failed at validation stage: {}", e.getMessage());
             // If validation fails (API key/Template), we can't process any
             if (request.getRecipients() != null) {
-                failedRecipients.addAll(request.getRecipients().keySet());
+                failedRecipients.addAll(request.getRecipients().stream()
+                        .map(NotificationBulkRequestDto.BulkRecipient::getEmail)
+                        .toList());
             }
             throw e; // Rethrow to let global handler handle it
         }
