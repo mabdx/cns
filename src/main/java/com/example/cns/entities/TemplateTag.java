@@ -5,8 +5,10 @@ import lombok.*;
 
 @Entity
 @Table(name = "template_tags")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class TemplateTag {
     @Id
@@ -19,4 +21,9 @@ public class TemplateTag {
 
     @Column(name = "tag_name", nullable = false)
     private String tagName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "datatype", nullable = false)
+    @Builder.Default
+    private TagDatatype datatype = TagDatatype.STRING;
 }

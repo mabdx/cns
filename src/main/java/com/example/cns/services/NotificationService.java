@@ -8,6 +8,7 @@ import com.example.cns.entities.App;
 import com.example.cns.entities.Notification;
 import com.example.cns.entities.Template;
 import com.example.cns.entities.TemplateTag;
+import com.example.cns.entities.TagDatatype;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
 import com.example.cns.repositories.NotificationRepository;
@@ -45,48 +46,35 @@ public class NotificationService {
         // Prepare recipient list
         List<String> recipientList = new ArrayList<>();
 
-        // Case 2: Single recipient provided
-        if (request.getRecipient() != null && !request.getRecipient().isBlank()) {
+        // Case 2: Single recipient field
+        if (request.getRecipient() != null) {
             recipientList.add(request.getRecipient());
-            log.debug("Single recipient mode: {}", request.getRecipient());
+            log.debug("Single recipient added: {}", request.getRecipient());
         }
 
-        // Case 3: Multiple recipients provided
+        // Case 3: Multiple recipients field
         if (request.getRecipients() != null && !request.getRecipients().isEmpty()) {
             recipientList.addAll(request.getRecipients());
-            log.debug("Multiple recipients mode: {} recipients", request.getRecipients().size());
+            log.debug("Multiple recipients added: {} recipients", request.getRecipients().size());
         }
 
         // Now process all recipients (whether 1 or many)
-        // Ensure unique recipients (No repeated users)
-        // Check for duplicates before filtering
-        List<String> validRecipients = recipientList.stream()
-                .filter(Objects::nonNull)
-                .filter(r -> !r.isBlank())
-                .toList();
-
-        if (validRecipients.stream().distinct().count() < validRecipients.size()) {
+        // STRICT VALIDATION: Fail if any email is invalid
+        for (String recipient : recipientList) {
+            validateEmailFormat(recipient);
+        }
+        if (recipientList.stream().distinct().count() < recipientList.size()) {
             throw new IllegalArgumentException("Duplicate emails are not allowed in the request.");
         }
 
-        // Ensure unique recipients (No repeated users)
-        List<String> uniqueRecipients = recipientList.stream()
-                .filter(Objects::nonNull)
-                .filter(r -> !r.isBlank())
-                .distinct()
-                .collect(Collectors.toList());
-
-        if (uniqueRecipients.isEmpty()) {
-            log.warn("No valid recipients after filtering duplicates and blanks");
-            throw new IllegalArgumentException("No valid recipients provided");
-        }
+        List<String> uniqueRecipients = new ArrayList<>(recipientList);
 
         return processNotifications(request.getApiKey(), request.getTemplateId(), uniqueRecipients,
                 request.getPlaceholders());
     }
 
     private Map<String, Object> processNotifications(String apiKey, Long templateId, List<String> recipients,
-            Map<String, String> placeholders) {
+            Map<String, Object> placeholders) {
         log.info("Starting notification process for {} recipient(s)", recipients.size());
 
         List<String> successfulRecipients = new ArrayList<>();
@@ -128,7 +116,8 @@ public class NotificationService {
             throw new IllegalStateException("Template is not active. Current status: " + template.getStatus());
         }
 
-        // 4. INTEGRATION CHECK: Strict Tag Validation - throws 400 if tags missing
+        // 4. INTEGRATION CHECK: Strict Tag Validation - throws 400 if tags missing or
+        // type mismatch
         validateTags(template.getId(), placeholders);
 
         // 5. Process each recipient individually
@@ -257,34 +246,85 @@ public class NotificationService {
         notificationRepository.save(notification);
     }
 
-    // STRICT validation: Throws exception if missing
-    private void validateTags(Long templateId, Map<String, String> placeholders) {
-        List<String> requiredTags = tagRepository.findByTemplateId(templateId).stream()
+    // STRICT validation: Throws exception if missing, type mismatch, or EXTRA tags
+    // provided
+    private void validateTags(Long templateId, Map<String, Object> placeholders) {
+        List<TemplateTag> requiredTags = tagRepository.findByTemplateId(templateId);
+        Set<String> requiredTagNames = requiredTags.stream()
                 .map(TemplateTag::getTagName)
-                .toList();
+                .collect(Collectors.toSet());
 
-        if (requiredTags.isEmpty())
-            return;
-
+        // 1. Check for missing or invalid type
         List<String> missing = new ArrayList<>();
-        for (String required : requiredTags) {
-            String value = (placeholders != null) ? placeholders.get(required) : null;
-            if (value == null || value.isBlank()) {
-                missing.add(required);
+        if (!requiredTags.isEmpty()) {
+            for (TemplateTag required : requiredTags) {
+                Object value = (placeholders != null) ? placeholders.get(required.getTagName()) : null;
+                if (value == null || value.toString().isBlank()) {
+                    missing.add(required.getTagName());
+                } else {
+                    validateTagTypes(required, value);
+                }
             }
         }
 
         if (!missing.isEmpty()) {
-            // This throws the error -> Catch block catches it -> Saves as FAILED
             throw new IllegalArgumentException("Missing required tags: " + missing);
+        }
+
+        // 2. Check for EXTRA tags (not allowed)
+        if (placeholders != null && !placeholders.isEmpty()) {
+            List<String> extra = new ArrayList<>();
+            for (String providedKey : placeholders.keySet()) {
+                if (!requiredTagNames.contains(providedKey)) {
+                    extra.add(providedKey);
+                }
+            }
+            if (!extra.isEmpty()) {
+                throw new IllegalArgumentException("Unexpected extra tags provided: " + extra);
+            }
         }
     }
 
-    private String resolve(String body, Map<String, String> placeholders) {
+    private void validateTagTypes(TemplateTag tag, Object value) {
+        TagDatatype datatype = tag.getDatatype();
+        switch (datatype) {
+            case NUMBER:
+                if (!(value instanceof Number)) {
+                    throw new IllegalArgumentException("Tag '" + tag.getTagName() + "' must be a NUMBER.");
+                }
+                break;
+            case BOOLEAN:
+                if (!(value instanceof Boolean)) {
+                    throw new IllegalArgumentException("Tag '" + tag.getTagName() + "' must be a BOOLEAN.");
+                }
+                break;
+            case STRING:
+                if (!(value instanceof String)) {
+                    throw new IllegalArgumentException("Tag '" + tag.getTagName() + "' must be a STRING.");
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void validateEmailFormat(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Recipient email is missing or null.");
+        }
+
+        // Check for basic email syntax (must have @ and a domain with a dot)
+        if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new IllegalArgumentException("Recipient '" + email + "' is not a valid email address.");
+        }
+    }
+
+    private String resolve(String body, Map<String, Object> placeholders) {
         if (placeholders == null)
             return body;
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            body = body.replace("{{" + entry.getKey() + "}}", entry.getValue());
+        for (Map.Entry<String, Object> entry : placeholders.entrySet()) {
+            String value = entry.getValue() != null ? entry.getValue().toString() : "";
+            body = body.replace("{{" + entry.getKey() + "}}", value);
         }
         return body;
     }
@@ -295,17 +335,17 @@ public class NotificationService {
             throw new IllegalArgumentException("At least one recipient must be provided");
         }
 
-        // Check for duplicate emails and validate format
-        List<String> recipientEmails = request.getRecipients().stream()
-                .map(NotificationBulkRequestDto.BulkRecipient::getEmail)
-                .filter(email -> email != null && !email.isBlank())
-                .toList();
-
-        if (recipientEmails.isEmpty()) {
-            throw new IllegalArgumentException("No valid recipient emails provided.");
+        // Check for duplicate emails and validate format strictly
+        List<String> recipientEmails = new ArrayList<>();
+        for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
+            if (recipient == null) {
+                throw new IllegalArgumentException("Bulk recipient entry cannot be null.");
+            }
+            validateEmailFormat(recipient.getEmail());
+            recipientEmails.add(recipient.getEmail());
         }
-        Set<String> uniqueEmails = new HashSet<>(recipientEmails);
-        if (uniqueEmails.size() < recipientEmails.size()) {
+
+        if (new HashSet<>(recipientEmails).size() < recipientEmails.size()) {
             throw new IllegalArgumentException("Duplicate emails are not allowed in bulk requests.");
         }
 
@@ -348,7 +388,9 @@ public class NotificationService {
 
             // Pre-validation: Check all recipients for missing params BEFORE sending any
             for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
-                Map<String, String> mergedPlaceholders = new HashMap<>();
+                // recipient and email are already validated above
+
+                Map<String, Object> mergedPlaceholders = new HashMap<>();
                 if (request.getGlobalPlaceholders() != null) {
                     mergedPlaceholders.putAll(request.getGlobalPlaceholders());
                 }
@@ -360,16 +402,16 @@ public class NotificationService {
 
             // 4. Process each recipient individually
             for (NotificationBulkRequestDto.BulkRecipient recipient : request.getRecipients()) {
-                String recipientEmail = recipient.getEmail();
-                // (Null checks already performed in validation step above)
 
-                Map<String, String> personalizedPlaceholders = recipient.getPlaceholders();
+                String recipientEmail = recipient.getEmail();
+
+                Map<String, Object> personalizedPlaceholders = recipient.getPlaceholders();
 
                 try {
                     log.debug("Processing personalized notification for recipient: {}", recipientEmail);
 
                     // Merge global with personalized (personalized takes precedence)
-                    Map<String, String> mergedPlaceholders = new HashMap<>();
+                    Map<String, Object> mergedPlaceholders = new HashMap<>();
                     if (request.getGlobalPlaceholders() != null) {
                         mergedPlaceholders.putAll(request.getGlobalPlaceholders());
                     }
@@ -445,11 +487,9 @@ public class NotificationService {
     }
 
     public Page<NotificationResponseDto> getAllNotifications(Long appId, Long templateId, String recipientEmail,
-            String status,
-            Pageable pageable) {
-        log.debug("Fetching notifications with filters - AppId: {}, TemplateId: {}, Email: {}, Status: {}", appId,
-                templateId,
-                recipientEmail, status);
+            String subject, String status, Pageable pageable) {
+        log.debug("Fetching notifications with filters - AppId: {}, TemplateId: {}, Email: {}, Subject: {}, Status: {}",
+                appId, templateId, recipientEmail, subject, status);
 
         if (templateId != null && !templateRepository.existsById(templateId)) {
             throw new ResourceNotFoundException("Template not found with ID: " + templateId);
@@ -463,8 +503,7 @@ public class NotificationService {
         }
 
         Page<Notification> notifications = notificationRepository.findByFilters(appId, templateId, recipientEmail,
-                status,
-                pageable);
+                subject, status, pageable);
         return notifications.map(this::convertToResponseDto);
     }
 

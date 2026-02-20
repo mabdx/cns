@@ -22,6 +22,7 @@ import java.util.Collections;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final com.example.cns.repositories.UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -30,16 +31,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
+                String email = tokenProvider.getUserEmailFromJWT(jwt);
                 String name = tokenProvider.getUserNameFromJWT(jwt);
 
-                // Use name as principal so that Spring Security Auditing picks it up for
-                // createdBy/updatedBy (as per user request)
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        name, null, Collections.emptyList());
+                // DB CHECK: Ensure user exists and is strictly active
+                var userOptional = userRepository.findByEmail(email);
 
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                if (userOptional.isPresent()) {
+                    var user = userOptional.get();
+                    if (user.isActive() && !user.isDeleted()) {
+                        // User is valid, proceed with authentication
+                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                name, null, Collections.emptyList());
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    } else {
+                        log.warn("Blocked inactive/deleted user access attempt: {}", email);
+                    }
+                } else {
+                    log.warn("User from token not found in DB: {}", email);
+                }
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);

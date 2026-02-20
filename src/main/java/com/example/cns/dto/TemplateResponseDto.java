@@ -14,7 +14,15 @@ public class TemplateResponseDto {
     private String subject;
     private String htmlBody;
     private String status;
-    private List<String> detectedTags;
+    private List<TagInfo> detectedTags;
+
+    @Data
+    @Builder
+    public static class TagInfo {
+        private String tagName;
+        private String datatype;
+    }
+
     private Boolean isDeleted;
     private java.time.LocalDateTime createdAt;
     private java.time.LocalDateTime updatedAt;

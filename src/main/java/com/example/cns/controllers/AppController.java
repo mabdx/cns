@@ -61,14 +61,23 @@ public class AppController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AppResponseDto> getAppById(@PathVariable Long id) {
+    public ResponseEntity<AppResponseDto> getAppById(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         return ResponseEntity.ok(appService.getAppById(id));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateApp(
             @PathVariable Long id,
-            @RequestBody AppRequestDto request) {
+            @RequestBody AppRequestDto request,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         AppResponseDto app = appService.updateApp(id, request);
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "App updated successfully");
@@ -77,7 +86,12 @@ public class AppController {
     }
 
     @DeleteMapping("/delete/{id}")
-    public ResponseEntity<Map<String, Object>> deleteApp(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> deleteApp(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         appService.deleteApp(id);
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "App deleted successfully");

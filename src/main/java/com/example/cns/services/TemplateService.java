@@ -1,10 +1,12 @@
 package com.example.cns.services;
 
+import com.example.cns.dto.TagUpdateRequestDto;
 import com.example.cns.dto.TemplateRequestDto;
 import com.example.cns.dto.TemplateResponseDto;
 import com.example.cns.entities.App;
 import com.example.cns.entities.Template;
 import com.example.cns.entities.TemplateTag;
+import com.example.cns.entities.TagDatatype;
 import com.example.cns.exception.InvalidOperationException;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
@@ -19,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -45,6 +49,20 @@ public class TemplateService {
     @Transactional
     public TemplateResponseDto createTemplate(TemplateRequestDto request) {
         log.debug("Entering createTemplate for App ID: {}", request.getAppId());
+
+        // Programmatic validation for Create
+        if (request.getAppId() == null) {
+            throw new IllegalArgumentException("App ID is required");
+        }
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Template name is required");
+        }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new IllegalArgumentException("Subject is required");
+        }
+        if (request.getHtmlBody() == null || request.getHtmlBody().trim().isEmpty()) {
+            throw new IllegalArgumentException("HTML Body is required");
+        }
 
         App app = appRepository.findById(request.getAppId())
                 .orElseThrow(() -> {
@@ -82,12 +100,15 @@ public class TemplateService {
 
         Template savedTemplate = templateRepository.saveAndFlush(template);
 
-        List<String> extractedTags = extractAndSaveTags(savedTemplate, safeHtml);
+        // FIX: Extract tags from BOTH subject and body
+        extractAndSaveTags(savedTemplate, savedTemplate.getSubject(), savedTemplate.getHtmlBody());
+
+        List<TemplateTag> savedTags = tagRepository.findByTemplateId(savedTemplate.getId());
 
         log.info("Template '{}' (ID: {}) created successfully with {} tags.",
-                savedTemplate.getName(), savedTemplate.getId(), extractedTags.size());
+                savedTemplate.getName(), savedTemplate.getId(), savedTags.size());
 
-        return mapToDto(savedTemplate, extractedTags);
+        return mapToDto(savedTemplate, savedTags);
     }
 
     /**
@@ -107,35 +128,39 @@ public class TemplateService {
 
         if ("ARCHIVED".equalsIgnoreCase(template.getStatus())) {
             if (request.getStatus() == null) {
-                throw new InvalidOperationException("Cannot edit properties of an ARCHIVED template. Only status can be changed.");
+                throw new InvalidOperationException(
+                        "Cannot edit properties of an ARCHIVED template. Only status can be changed.");
             }
-            if (request.getName() != null || request.getSubject() != null || request.getHtmlBody() != null || request.getAppId() != null) {
-                throw new InvalidOperationException("Cannot edit properties of an ARCHIVED template. Only status can be changed.");
+            if (request.getName() != null || request.getSubject() != null || request.getHtmlBody() != null
+                    || request.getAppId() != null) {
+                throw new InvalidOperationException(
+                        "Cannot edit properties of an ARCHIVED template. Only status can be changed.");
             }
+        }
+
+        if (request.getAppId() != null) {
+            throw new InvalidOperationException("App ID cannot be changed for an existing template");
+        }
+
+        boolean nameChanged = request.getName() != null && !request.getName().equals(template.getName());
+        boolean subjectChanged = request.getSubject() != null && !request.getSubject().equals(template.getSubject());
+
+        String safeHtml = request.getHtmlBody() != null ? processAndValidateHtml(request.getHtmlBody()) : null;
+        boolean bodyChanged = safeHtml != null && !safeHtml.equals(template.getHtmlBody());
+
+        String newStatus = request.getStatus() != null ? request.getStatus().toUpperCase() : null;
+        boolean statusChanged = newStatus != null && !newStatus.equals(template.getStatus());
+
+        // Centralized "Nothing is changed" check
+        if ((request.getName() != null || request.getSubject() != null ||
+                request.getHtmlBody() != null || request.getStatus() != null) &&
+                !nameChanged && !subjectChanged && !bodyChanged && !statusChanged) {
+            throw new InvalidOperationException("Nothing is changed");
         }
 
         if (request.getName() == null && request.getSubject() == null &&
-                request.getHtmlBody() == null && request.getStatus() == null && request.getAppId() == null) {
+                request.getHtmlBody() == null && request.getStatus() == null) {
             throw new IllegalArgumentException("No fields to update");
-        }
-
-        // BUG_39: Validate appId if provided
-        if (request.getAppId() != null) {
-            App newApp = appRepository.findById(request.getAppId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Application not found with ID: " + request.getAppId()));
-
-            if (newApp.isDeleted()) {
-                throw new InvalidOperationException(
-                        "Cannot update template with a deleted application");
-            }
-
-            if ("ARCHIVED".equalsIgnoreCase(newApp.getStatus())) {
-                throw new InvalidOperationException(
-                        "Cannot update template with an archived application");
-            }
-
-            template.setApp(newApp);
         }
 
         boolean contentChanged = false;
@@ -144,58 +169,50 @@ public class TemplateService {
             if (request.getName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Template name cannot be empty");
             }
-            if (request.getName().equals(template.getName())) {
-                throw new InvalidOperationException("The new name is the same as the current name.");
+            if (nameChanged) {
+                if (templateRepository.existsByAppIdAndName(template.getApp().getId(), request.getName())) {
+                    throw new com.example.cns.exception.DuplicateResourceException(
+                            "Template with name '" + request.getName() + "' already exists for this app.");
+                }
+                template.setName(request.getName());
             }
-            if (templateRepository.existsByAppIdAndName(template.getApp().getId(), request.getName())) {
-                throw new com.example.cns.exception.DuplicateResourceException(
-                        "Template with name '" + request.getName() + "' already exists.");
-            }
-            template.setName(request.getName());
         }
+
         if (request.getSubject() != null) {
             if (request.getSubject().trim().isEmpty()) {
                 throw new IllegalArgumentException("Subject cannot be empty");
             }
-            if (request.getSubject().equals(template.getSubject())) {
-                throw new InvalidOperationException("The new subject is the same as the current subject.");
+            if (subjectChanged) {
+                template.setSubject(request.getSubject());
+                contentChanged = true;
             }
-            template.setSubject(request.getSubject());
         }
+
         if (request.getHtmlBody() != null) {
-            String safeHtml = processAndValidateHtml(request.getHtmlBody());
-            if (safeHtml.equals(template.getHtmlBody())) {
-                throw new InvalidOperationException("The new HTML body is the same as the current one.");
+            if (bodyChanged) {
+                template.setHtmlBody(safeHtml);
+                contentChanged = true;
             }
-            template.setHtmlBody(safeHtml);
-            contentChanged = true;
         }
+
         if (request.getStatus() != null) {
-            String newStatus = request.getStatus().toUpperCase();
-            if (newStatus.equals("DELETED")) {
+            if ("DELETED".equalsIgnoreCase(request.getStatus())) {
                 throw new InvalidOperationException(
                         "Cannot change status to DELETED via update. Use the delete endpoint instead.");
             }
-            if (!newStatus.equals("ACTIVE") && !newStatus.equals("ARCHIVED") && !newStatus.equals("DRAFT")) {
-                throw new IllegalArgumentException(
-                        "Invalid status value. Allowed values for update: ACTIVE, ARCHIVED, DRAFT");
-            }
-
-            if (newStatus.equals(template.getStatus())) {
-                throw new InvalidOperationException("Template is already in the requested status.");
-            }
-
-            template.setStatus(newStatus);
-            switch (newStatus) {
-                case "ACTIVE":
-                    template.setActive(true);
-                    template.setDeleted(false);
-                    break;
-                case "ARCHIVED":
-                case "DRAFT":
-                    template.setActive(false);
-                    template.setDeleted(false);
-                    break;
+            if (statusChanged) {
+                template.setStatus(newStatus);
+                switch (newStatus) {
+                    case "ACTIVE":
+                        template.setActive(true);
+                        template.setDeleted(false);
+                        break;
+                    case "DRAFT":
+                    case "ARCHIVED":
+                        template.setActive(false);
+                        template.setDeleted(false);
+                        break;
+                }
             }
         }
 
@@ -204,16 +221,81 @@ public class TemplateService {
 
         Template savedTemplate = templateRepository.save(template);
 
-        List<String> tags;
+        List<TemplateTag> tags;
         if (contentChanged) {
             tagRepository.deleteByTemplateId(savedTemplate.getId());
-            tags = extractAndSaveTags(savedTemplate, request.getHtmlBody());
+            // FIX: Pass BOTH subject and body for tag extraction
+            extractAndSaveTags(savedTemplate, savedTemplate.getSubject(), savedTemplate.getHtmlBody());
+            tags = tagRepository.findByTemplateId(savedTemplate.getId());
         } else {
-            tags = tagRepository.findByTemplateId(savedTemplate.getId()).stream().map(TemplateTag::getTagName).toList();
+            tags = tagRepository.findByTemplateId(savedTemplate.getId());
         }
 
         log.info("Template ID: {} updated successfully.", id);
         return mapToDto(savedTemplate, tags);
+    }
+
+    /**
+     * Get tags for a specific template
+     */
+    @Transactional(readOnly = true)
+    public List<TemplateResponseDto.TagInfo> getTemplateTags(Long id) {
+        log.debug("Fetching tags for template ID: {}", id);
+        if (!templateRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Template not found with ID: " + id);
+        }
+
+        List<TemplateTag> tags = new ArrayList<>();
+        try {
+            tags = tagRepository.findByTemplateId(id);
+        } catch (Exception e) {
+            log.error("Failed to load tags for Template ID {}: {}. Possibly corrupted data in database.",
+                    id, e.getMessage());
+        }
+
+        return tags.stream()
+                .map(tag -> TemplateResponseDto.TagInfo.builder()
+                        .tagName(tag.getTagName())
+                        .datatype(tag.getDatatype().name())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Update datatypes for multiple tags of a template
+     */
+    @Transactional
+    public TemplateResponseDto updateTemplateTags(Long id, TagUpdateRequestDto request) {
+        log.debug("Updating tag types for template ID: {}", id);
+
+        Template template = templateRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
+
+        List<TemplateTag> existingTags = tagRepository.findByTemplateId(id);
+        Map<String, TemplateTag> tagMap = existingTags.stream()
+                .collect(Collectors.toMap(TemplateTag::getTagName, t -> t));
+
+        if (request.getTagTypes() != null) {
+            for (Map.Entry<String, String> entry : request.getTagTypes().entrySet()) {
+                String tagName = entry.getKey();
+                TagDatatype enumType;
+                try {
+                    enumType = TagDatatype.valueOf(entry.getValue().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException(
+                            "Invalid datatype: " + entry.getValue() + ". Allowed: STRING, NUMBER, BOOLEAN");
+                }
+
+                TemplateTag tag = tagMap.get(tagName);
+                if (tag == null) {
+                    throw new ResourceNotFoundException("Tag '" + tagName + "' not found in this template");
+                }
+                tag.setDatatype(enumType);
+                tagRepository.save(tag);
+            }
+        }
+
+        return mapToDto(template, tagRepository.findByTemplateId(id));
     }
 
     /**
@@ -269,9 +351,9 @@ public class TemplateService {
 
         if (status != null && !status.trim().isEmpty()) {
             String upperStatus = status.toUpperCase();
-            if (!Set.of("ACTIVE", "ARCHIVED", "DRAFT", "DELETED").contains(upperStatus)) {
+            if (!Set.of("ACTIVE", "ARCHIVED", "DRAFT").contains(upperStatus)) {
                 throw new IllegalArgumentException(
-                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT, DELETED");
+                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT");
             }
         }
 
@@ -279,10 +361,13 @@ public class TemplateService {
                 status, name, pageable);
 
         return templates.map(t -> {
-            List<String> tags = tagRepository.findByTemplateId(t.getId())
-                    .stream()
-                    .map(TemplateTag::getTagName)
-                    .collect(Collectors.toList());
+            List<TemplateTag> tags = new ArrayList<>();
+            try {
+                tags = tagRepository.findByTemplateId(t.getId());
+            } catch (Exception e) {
+                log.error("Failed to load tags for Template ID {}: {}. Possibly corrupted data in database.",
+                        t.getId(), e.getMessage());
+            }
             return mapToDto(t, tags);
         });
     }
@@ -309,25 +394,40 @@ public class TemplateService {
     }
 
     /**
-     * Extracts strings inside {{ }} from HTML and saves them to the Tag Repository.
+     * Extracts strings inside {{ }} from both subject and HTML and saves them to
+     * the Tag Repository.
      */
-    private List<String> extractAndSaveTags(Template template, String html) {
-        List<String> tagsFound = new ArrayList<>();
+    private List<String> extractAndSaveTags(Template template, String subject, String html) {
+        Set<String> tagsFound = new HashSet<>();
         Pattern pattern = Pattern.compile("\\{\\{(.+?)\\}\\}");
-        Matcher matcher = pattern.matcher(html);
 
-        while (matcher.find()) {
-            String tagName = matcher.group(1).trim();
-            tagsFound.add(tagName);
+        if (subject != null) {
+            Matcher matcher = pattern.matcher(subject);
+            while (matcher.find()) {
+                tagsFound.add(matcher.group(1).trim());
+            }
+        }
 
+        if (html != null) {
+            Matcher matcher = pattern.matcher(html);
+            while (matcher.find()) {
+                tagsFound.add(matcher.group(1).trim());
+            }
+        }
+
+        for (String tagName : tagsFound) {
+            if (tagName == null || tagName.trim().isEmpty()) {
+                continue;
+            }
             tagRepository.save(TemplateTag.builder()
                     .template(template)
                     .tagName(tagName)
+                    .datatype(TagDatatype.STRING)
                     .build());
         }
 
-        log.debug("Extracted {} tags for Template ID {}: {}", tagsFound.size(), template.getId(), tagsFound);
-        return tagsFound;
+        log.debug("Extracted {} unique tags for Template ID {}: {}", tagsFound.size(), template.getId(), tagsFound);
+        return new ArrayList<>(tagsFound);
     }
 
     /**
@@ -339,14 +439,19 @@ public class TemplateService {
         Template template = templateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found with ID: " + id));
 
-        List<String> tags = tagRepository.findByTemplateId(id).stream()
-                .map(TemplateTag::getTagName)
-                .toList();
+        List<TemplateTag> tags = tagRepository.findByTemplateId(id);
 
         return mapToDto(template, tags);
     }
 
-    private TemplateResponseDto mapToDto(Template t, List<String> tags) {
+    private TemplateResponseDto mapToDto(Template t, List<TemplateTag> tags) {
+        List<TemplateResponseDto.TagInfo> tagInfos = tags.stream()
+                .map(tag -> TemplateResponseDto.TagInfo.builder()
+                        .tagName(tag.getTagName())
+                        .datatype(tag.getDatatype().name())
+                        .build())
+                .collect(Collectors.toList());
+
         return TemplateResponseDto.builder()
                 .id(t.getId())
                 .appId(t.getApp().getId())
@@ -355,7 +460,7 @@ public class TemplateService {
                 .htmlBody(t.getHtmlBody())
                 .subject(t.getSubject())
                 .status(t.getStatus())
-                .detectedTags(tags)
+                .detectedTags(tagInfos)
                 .isDeleted(t.isDeleted())
                 .createdAt(t.getCreatedAt())
                 .updatedAt(t.getUpdatedAt())

@@ -61,14 +61,14 @@ public class AppService {
             String name,
             String status,
             Pageable pageable) {
-        
+
         if (status != null && !status.trim().isEmpty()) {
             String upperStatus = status.toUpperCase();
             if (!Set.of("ACTIVE", "ARCHIVED", "DELETED").contains(upperStatus)) {
                 throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
             }
         }
-        
+
         Page<App> apps = appRepository.findByFilters(id, name, status, pageable);
         return apps.map(this::mapToDto);
     }
@@ -94,20 +94,27 @@ public class AppService {
             throw new IllegalArgumentException("No fields to update");
         }
 
+        boolean nameChanged = request.getName() != null && !request.getName().equals(app.getName());
+        boolean statusChanged = request.getStatus() != null &&
+                !request.getStatus().toUpperCase().equals(app.getStatus());
+
+        if (!nameChanged && !statusChanged) {
+            throw new InvalidOperationException("Nothing is changed");
+        }
+
         if (request.getName() != null) {
             if (request.getName().trim().isEmpty()) {
                 throw new IllegalArgumentException("App name cannot be empty");
             }
-            if (request.getName().equals(app.getName())) {
-                throw new InvalidOperationException("The new name is the same as the current name.");
+            if (nameChanged) {
+                appRepository.findByName(request.getName()).ifPresent(existingApp -> {
+                    if (!existingApp.getId().equals(app.getId())) {
+                        throw new com.example.cns.exception.DuplicateResourceException(
+                                "App with name '" + request.getName() + "' already exists.");
+                    }
+                });
+                app.setName(request.getName());
             }
-            appRepository.findByName(request.getName()).ifPresent(existingApp -> {
-                if (!existingApp.getId().equals(app.getId())) {
-                    throw new com.example.cns.exception.DuplicateResourceException(
-                            "App with name '" + request.getName() + "' already exists.");
-                }
-            });
-            app.setName(request.getName());
         }
 
         if (request.getStatus() != null) {
@@ -116,24 +123,22 @@ public class AppService {
                 throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
             }
 
-            if (newStatus.equals(app.getStatus())) {
-                throw new InvalidOperationException("App is already in the requested state");
-            }
-
-            app.setStatus(newStatus);
-            switch (newStatus) {
-                case "ACTIVE":
-                    app.setActive(true);
-                    app.setDeleted(false);
-                    break;
-                case "ARCHIVED":
-                    app.setActive(false);
-                    app.setDeleted(false);
-                    break;
-                case "DELETED":
-                    app.setActive(false);
-                    app.setDeleted(true);
-                    break;
+            if (statusChanged) {
+                app.setStatus(newStatus);
+                switch (newStatus) {
+                    case "ACTIVE":
+                        app.setActive(true);
+                        app.setDeleted(false);
+                        break;
+                    case "ARCHIVED":
+                        app.setActive(false);
+                        app.setDeleted(false);
+                        break;
+                    case "DELETED":
+                        app.setActive(false);
+                        app.setDeleted(true);
+                        break;
+                }
             }
         }
 

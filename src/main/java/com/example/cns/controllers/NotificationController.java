@@ -26,7 +26,12 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @PostMapping("/send")
-    public ResponseEntity<Map<String, Object>> send(@Valid @RequestBody NotificationRequestDto request) {
+    public ResponseEntity<Map<String, Object>> send(
+            @Valid @RequestBody NotificationRequestDto request,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received notification request");
 
         // The service now handles single, multiple, or no recipients automatically
@@ -36,14 +41,24 @@ public class NotificationController {
     }
 
     @PostMapping("/send/bulk")
-    public ResponseEntity<Map<String, Object>> sendBulk(@Valid @RequestBody NotificationBulkRequestDto request) {
+    public ResponseEntity<Map<String, Object>> sendBulk(
+            @Valid @RequestBody NotificationBulkRequestDto request,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received personalized bulk notification request");
         Map<String, Object> result = notificationService.sendBulkNotifications(request);
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/{id}/retry")
-    public ResponseEntity<Map<String, Object>> retry(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> retry(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received retry request for notification ID: {}", id);
         Map<String, Object> result = notificationService.retryNotification(id);
         return ResponseEntity.ok(result);
@@ -54,6 +69,7 @@ public class NotificationController {
             @RequestParam(required = false) Long appId,
             @RequestParam(required = false) Long templateId,
             @RequestParam(required = false) String recipientEmail,
+            @RequestParam(required = false) String subject,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -73,11 +89,15 @@ public class NotificationController {
         Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, sort);
 
         return ResponseEntity.ok(
-                notificationService.getAllNotifications(appId, templateId, recipientEmail, status, pageable));
+                notificationService.getAllNotifications(appId, templateId, recipientEmail, subject, status, pageable));
     }
 
     @GetMapping("/health")
-    public ResponseEntity<NotificationHealthDto> getHealthSummary() {
+    public ResponseEntity<NotificationHealthDto> getHealthSummary(
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received request for notification health summary");
         return ResponseEntity.ok(notificationService.getHealthSummary());
     }

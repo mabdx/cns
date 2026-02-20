@@ -16,5 +16,5 @@ public class NotificationRequestDto {
     private String recipient; // For single user
     private List<String> recipients; // For multiple users
 
-    private Map<String, String> placeholders;
+    private Map<String, Object> placeholders;
 }

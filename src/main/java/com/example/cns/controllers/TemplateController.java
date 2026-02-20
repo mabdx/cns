@@ -1,5 +1,6 @@
 package com.example.cns.controllers;
 
+import com.example.cns.dto.TagUpdateRequestDto;
 import com.example.cns.dto.TemplateRequestDto;
 import com.example.cns.dto.TemplateResponseDto;
 import com.example.cns.services.TemplateService;
@@ -34,7 +35,12 @@ public class TemplateController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TemplateResponseDto> getById(@PathVariable Long id) {
+    public ResponseEntity<TemplateResponseDto> getById(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received request to fetch template ID: {}", id);
         return ResponseEntity.ok(templateService.getTemplateById(id));
     }
@@ -42,7 +48,11 @@ public class TemplateController {
     @PatchMapping("/{id}")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable Long id,
-            @RequestBody TemplateRequestDto request) {
+            @Valid @RequestBody TemplateRequestDto request,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received request to update template ID: {}", id);
         TemplateResponseDto template = templateService.updateTemplate(id, request);
         Map<String, Object> response = new java.util.HashMap<>();
@@ -52,11 +62,43 @@ public class TemplateController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> delete(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
         log.info("Received request to delete template ID: {}", id);
         templateService.deleteTemplate(id);
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "Template soft-deleted successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/tags")
+    public ResponseEntity<List<TemplateResponseDto.TagInfo>> getTags(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
+        log.info("Received request to fetch tags for template ID: {}", id);
+        return ResponseEntity.ok(templateService.getTemplateTags(id));
+    }
+
+    @PatchMapping("/{id}/tags")
+    public ResponseEntity<Map<String, Object>> patchTags(
+            @PathVariable Long id,
+            @Valid @RequestBody TagUpdateRequestDto request,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
+        log.info("Received request to update tag datatypes for template ID: {}", id);
+        TemplateResponseDto template = templateService.updateTemplateTags(id, request);
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Tag datatypes updated successfully");
+        response.put("data", template);
         return ResponseEntity.ok(response);
     }
 
@@ -67,7 +109,7 @@ public class TemplateController {
             @RequestParam(required = false) String name,
             @RequestParam Map<String, String> allParams,
             @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        
+
         Set<String> allowedParams = Set.of("appId", "status", "name", "page", "size", "sort");
         for (String param : allParams.keySet()) {
             if (!allowedParams.contains(param)) {
