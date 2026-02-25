@@ -43,3 +43,8 @@ logging:
 
 server:
   port: 8080
+
+app:
+  validation:
+    max-subject-length: 50
+    max-body-length: 500

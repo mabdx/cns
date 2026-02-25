@@ -16,8 +16,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +44,12 @@ public class TemplateService {
     private final AppRepository appRepository;
     private final TemplateTagRepository tagRepository;
 
+    @Value("${app.validation.max-subject-length}")
+    private int maxSubjectLength;
+
+    @Value("${app.validation.max-body-length}")
+    private int maxBodyLength;
+
     /**
      * 1. CREATE TEMPLATE
      * Handles creation and automatic tag extraction.
@@ -62,6 +70,24 @@ public class TemplateService {
         }
         if (request.getHtmlBody() == null || request.getHtmlBody().trim().isEmpty()) {
             throw new IllegalArgumentException("HTML Body is required");
+        }
+        if (request.getSubject().length() > maxSubjectLength) {
+            throw new IllegalArgumentException("Subject cannot exceed " + maxSubjectLength + " characters.");
+        }
+        if (request.getHtmlBody().length() > maxBodyLength) {
+            throw new IllegalArgumentException("HTML body cannot exceed " + maxBodyLength + " characters.");
+        }
+
+        String status = StringUtils.hasText(request.getStatus()) ? request.getStatus().toUpperCase() : "DRAFT";
+        if (!Set.of("ACTIVE", "DRAFT").contains(status)) {
+            throw new IllegalArgumentException("Status must be either ACTIVE or DRAFT.");
+        }
+
+        // Validate that ACTIVE status requires non-empty subject and htmlBody
+        if ("ACTIVE".equalsIgnoreCase(status)) {
+            if (request.getSubject().trim().isEmpty() || request.getHtmlBody().trim().isEmpty()) {
+                throw new IllegalArgumentException("Template cannot be set to ACTIVE status with empty subject or body");
+            }
         }
 
         App app = appRepository.findById(request.getAppId())
@@ -89,8 +115,8 @@ public class TemplateService {
                 .name(request.getName())
                 .subject(request.getSubject())
                 .htmlBody(safeHtml)
-                .status("ACTIVE")
-                .isActive(true)
+                .status(status)
+                .isActive("ACTIVE".equals(status))
                 .isDeleted(false)
                 .createdAt(now)
                 .createdBy(currentAuditor)
@@ -105,8 +131,8 @@ public class TemplateService {
 
         List<TemplateTag> savedTags = tagRepository.findByTemplateId(savedTemplate.getId());
 
-        log.info("Template '{}' (ID: {}) created successfully with {} tags.",
-                savedTemplate.getName(), savedTemplate.getId(), savedTags.size());
+        log.info("Template '{}' (ID: {}) created successfully with status {} and {} tags.",
+                savedTemplate.getName(), savedTemplate.getId(), savedTemplate.getStatus(), savedTags.size());
 
         return mapToDto(savedTemplate, savedTags);
     }
@@ -124,6 +150,13 @@ public class TemplateService {
 
         if (template.isDeleted()) {
             throw new InvalidOperationException("Cannot edit a DELETED template");
+        }
+        
+        if (request.getSubject() != null && request.getSubject().length() > maxSubjectLength) {
+            throw new IllegalArgumentException("Subject cannot exceed " + maxSubjectLength + " characters.");
+        }
+        if (request.getHtmlBody() != null && request.getHtmlBody().length() > maxBodyLength) {
+            throw new IllegalArgumentException("HTML body cannot exceed " + maxBodyLength + " characters.");
         }
 
         if ("ARCHIVED".equalsIgnoreCase(template.getStatus())) {
@@ -201,6 +234,15 @@ public class TemplateService {
                         "Cannot change status to DELETED via update. Use the delete endpoint instead.");
             }
             if (statusChanged) {
+                // Validate that ACTIVE status requires non-empty subject and body
+                if ("ACTIVE".equalsIgnoreCase(newStatus)) {
+                    String checkSubject = request.getSubject() != null ? request.getSubject() : template.getSubject();
+                    String checkBody = request.getHtmlBody() != null ? request.getHtmlBody() : template.getHtmlBody();
+                    if (checkSubject == null || checkSubject.trim().isEmpty() ||
+                        checkBody == null || checkBody.trim().isEmpty()) {
+                        throw new IllegalArgumentException("Template cannot be set to ACTIVE status with empty subject or body");
+                    }
+                }
                 template.setStatus(newStatus);
                 switch (newStatus) {
                     case "ACTIVE":
@@ -349,16 +391,20 @@ public class TemplateService {
             }
         }
 
+        boolean includeDeleted = false;
         if (status != null && !status.trim().isEmpty()) {
             String upperStatus = status.toUpperCase();
-            if (!Set.of("ACTIVE", "ARCHIVED", "DRAFT").contains(upperStatus)) {
+            if (!Set.of("ACTIVE", "ARCHIVED", "DRAFT", "DELETED").contains(upperStatus)) {
                 throw new IllegalArgumentException(
-                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT");
+                        "Invalid status value. Allowed values: ACTIVE, ARCHIVED, DRAFT, DELETED");
+            }
+            if ("DELETED".equalsIgnoreCase(upperStatus)) {
+                includeDeleted = true;
             }
         }
 
         org.springframework.data.domain.Page<Template> templates = templateRepository.findByAppIdAndStatus(appId,
-                status, name, pageable);
+                status, name, includeDeleted, pageable);
 
         return templates.map(t -> {
             List<TemplateTag> tags = new ArrayList<>();
@@ -386,10 +432,10 @@ public class TemplateService {
             return "<p>" + html.replace("\n", "<br>") + "</p>";
         } else {
             // It seems to be HTML, so validate and sanitize it
-            if (!Jsoup.isValid(html, Safelist.basic())) {
+            if (!Jsoup.isValid(html, Safelist.relaxed())) { // Changed from Safelist.basic() to Safelist.relaxed()
                 throw new IllegalArgumentException("The provided HTML body is not well-formed.");
             }
-            return Jsoup.clean(html, Safelist.basic());
+            return Jsoup.clean(html, Safelist.relaxed()); // Changed from Safelist.basic() to Safelist.relaxed()
         }
     }
 

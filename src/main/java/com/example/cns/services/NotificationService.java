@@ -43,7 +43,6 @@ public class NotificationService {
             throw new IllegalArgumentException("At least one recipient must be provided");
         }
 
-        // Prepare recipient list
         List<String> recipientList = new ArrayList<>();
 
         // Case 2: Single recipient field
@@ -484,6 +483,13 @@ public class NotificationService {
                         successfulRecipients.size(), failedRecipients.size()));
 
         return response;
+    }
+
+    public NotificationResponseDto getNotificationById(Long id) {
+        log.debug("Fetching notification details for ID: {}", id);
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + id));
+        return convertToResponseDto(notification);
     }
 
     public Page<NotificationResponseDto> getAllNotifications(Long appId, Long templateId, String recipientEmail,

@@ -21,11 +21,12 @@ public interface TemplateRepository extends JpaRepository<Template, Long> {
                         "(:appId IS NULL OR t.app.id = :appId) AND " +
                         "(:status IS NULL OR t.status = :status) AND " +
                         "(:name IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
-                        "t.isDeleted = false")
+                        "(:includeDeleted = true OR t.isDeleted = false)")
         org.springframework.data.domain.Page<Template> findByAppIdAndStatus(
                         @org.springframework.data.repository.query.Param("appId") Long appId,
                         @org.springframework.data.repository.query.Param("status") String status,
                         @org.springframework.data.repository.query.Param("name") String name,
+                        @org.springframework.data.repository.query.Param("includeDeleted") Boolean includeDeleted,
                         org.springframework.data.domain.Pageable pageable);
 
 }

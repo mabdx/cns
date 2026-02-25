@@ -20,10 +20,11 @@ public interface AppRepository extends JpaRepository<App, Long> {
     @Query("SELECT a FROM App a WHERE " +
             "(:id IS NULL OR a.id = :id) AND " +
             "(:name IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
-            "(:status IS NULL AND a.isDeleted = false OR LOWER(a.status) = LOWER(:status))")
+            "(:status IS NULL AND a.isDeleted = false OR LOWER(a.status) = LOWER(:status) OR :includeDeleted = true AND a.status = 'DELETED')")
     Page<App> findByFilters(
             @Param("id") Long id,
             @Param("name") String name,
             @Param("status") String status,
+            @Param("includeDeleted") Boolean includeDeleted,
             Pageable pageable);
 }

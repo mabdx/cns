@@ -7,6 +7,7 @@ import com.example.cns.exception.DuplicateResourceException;
 import com.example.cns.exception.InvalidOperationException;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
+import com.example.cns.repositories.TemplateRepository; // Import TemplateRepository
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.util.Collections; // Import Collections
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,6 +36,9 @@ public class AppServiceTest {
 
     @Mock
     private AppRepository appRepository;
+
+    @Mock // Add mock for TemplateRepository
+    private TemplateRepository templateRepository;
 
     @InjectMocks
     private AppService appService;
@@ -101,6 +106,16 @@ public class AppServiceTest {
     }
 
     @Test
+    void registerApp_ShouldThrowException_WhenNameIsTooLong() {
+        AppRequestDto request = new AppRequestDto();
+        request.setName("a".repeat(101));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            appService.registerApp(request);
+        });
+    }
+
+    @Test
     void updateApp_ShouldUpdateName_WhenSuccessful() {
         updateRequest.setName("GoSaaS HR Updated");
         when(appRepository.findById(1L)).thenReturn(Optional.of(testApp));
@@ -112,6 +127,16 @@ public class AppServiceTest {
         assertNotNull(response);
         assertEquals("GoSaaS HR Updated", response.getName());
         verify(appRepository, times(1)).save(testApp);
+    }
+
+    @Test
+    void updateApp_ShouldThrowException_WhenNameIsTooLong() {
+        updateRequest.setName("a".repeat(101));
+        when(appRepository.findById(1L)).thenReturn(Optional.of(testApp));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            appService.updateApp(1L, updateRequest);
+        });
     }
 
     @Test
@@ -168,6 +193,8 @@ public class AppServiceTest {
     void deleteApp_ShouldSetStatusToDeleted_WhenSuccessful() {
         when(appRepository.findById(1L)).thenReturn(Optional.of(testApp));
         when(appRepository.save(any(App.class))).thenReturn(testApp);
+        // Mock the template repository call
+        when(templateRepository.findByAppId(1L)).thenReturn(Collections.emptyList());
 
         appService.deleteApp(1L);
 
@@ -175,6 +202,7 @@ public class AppServiceTest {
         assertTrue(testApp.isDeleted());
         assertFalse(testApp.isActive());
         verify(appRepository, times(1)).save(testApp);
+        verify(templateRepository, times(1)).findByAppId(1L); // Verify the interaction
     }
 
     @Test

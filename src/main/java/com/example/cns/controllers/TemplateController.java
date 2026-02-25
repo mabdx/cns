@@ -128,7 +128,9 @@ public class TemplateController {
             }
         }
 
-        log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}", appId, status, name);
+        log.info("Received request to get/filter templates. App ID: {}, Status: {}, Name: {}, Pageable: {}", appId, status, name, pageable);
         return ResponseEntity.ok(templateService.getTemplates(appId, status, name, pageable));
     }
+    // Sorting example: sort=createdAt,asc or sort=createdAt,desc (default is createdAt,desc)
+    // Status values: ACTIVE, DRAFT, ARCHIVED, DELETED
 }

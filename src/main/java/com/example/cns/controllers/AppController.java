@@ -59,6 +59,8 @@ public class AppController {
 
         return ResponseEntity.ok(appService.getAllApps(id, name, status, pageable));
     }
+    // Sorting example: sort=createdAt,asc or sort=createdAt,desc (default is createdAt,desc)
+    // Status values: ACTIVE, ARCHIVED, DELETED
 
     @GetMapping("/{id}")
     public ResponseEntity<AppResponseDto> getAppById(
@@ -85,7 +87,7 @@ public class AppController {
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/delete/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteApp(
             @PathVariable Long id,
             @RequestParam Map<String, String> allParams) {

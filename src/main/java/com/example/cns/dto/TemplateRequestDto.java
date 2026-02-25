@@ -16,6 +16,6 @@ public class TemplateRequestDto {
 
     private String htmlBody;
 
-    @jakarta.validation.constraints.Pattern(regexp = "^(?i)(DRAFT|ACTIVE|ARCHIVED)$", message = "Status must be DRAFT, ACTIVE, or ARCHIVED")
+    @jakarta.validation.constraints.Pattern(regexp = "^(?i)(DRAFT|ACTIVE|ARCHIVED)$", message = "Status must be DRAFT, ARCHIVED, or ACTIVE")
     private String status;
 }

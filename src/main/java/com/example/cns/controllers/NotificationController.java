@@ -64,6 +64,17 @@ public class NotificationController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<NotificationResponseDto> getNotificationById(
+            @PathVariable Long id,
+            @RequestParam Map<String, String> allParams) {
+        if (!allParams.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected query parameters: " + allParams.keySet());
+        }
+        log.info("Received request for notification details with ID: {}", id);
+        return ResponseEntity.ok(notificationService.getNotificationById(id));
+    }
+
     @GetMapping("/logs")
     public ResponseEntity<Page<NotificationResponseDto>> getAllNotifications(
             @RequestParam(required = false) Long appId,

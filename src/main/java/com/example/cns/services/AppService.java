@@ -3,15 +3,18 @@ package com.example.cns.services;
 import com.example.cns.dto.AppRequestDto;
 import com.example.cns.dto.AppResponseDto;
 import com.example.cns.entities.App;
+import com.example.cns.entities.Template; // Import Template entity
 import com.example.cns.exception.InvalidOperationException;
 import com.example.cns.exception.ResourceNotFoundException;
 import com.example.cns.repositories.AppRepository;
+import com.example.cns.repositories.TemplateRepository; // Import TemplateRepository
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Import Transactional
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,10 +30,19 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class AppService {
     private final AppRepository appRepository;
+    private final TemplateRepository templateRepository; // Inject TemplateRepository
+    private static final int MAX_APP_NAME_LENGTH = 100;
 
+    @Transactional // Add transactional annotation for delete operation
     public AppResponseDto registerApp(@Valid AppRequestDto request) {
         log.info("Registering new application: {}", request.getName());
 
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("App name cannot be empty.");
+        }
+        if (request.getName().length() > MAX_APP_NAME_LENGTH) {
+            throw new IllegalArgumentException("App name cannot exceed " + MAX_APP_NAME_LENGTH + " characters.");
+        }
         if (appRepository.existsByName(request.getName())) {
             throw new com.example.cns.exception.DuplicateResourceException(
                     "Application with name '" + request.getName() + "' already exists.");
@@ -62,14 +74,18 @@ public class AppService {
             String status,
             Pageable pageable) {
 
+        boolean includeDeleted = false;
         if (status != null && !status.trim().isEmpty()) {
             String upperStatus = status.toUpperCase();
             if (!Set.of("ACTIVE", "ARCHIVED", "DELETED").contains(upperStatus)) {
                 throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
             }
+            if ("DELETED".equalsIgnoreCase(upperStatus)) {
+                includeDeleted = true;
+            }
         }
 
-        Page<App> apps = appRepository.findByFilters(id, name, status, pageable);
+        Page<App> apps = appRepository.findByFilters(id, name, status, includeDeleted, pageable);
         return apps.map(this::mapToDto);
     }
 
@@ -88,6 +104,10 @@ public class AppService {
 
         if (app.isDeleted()) {
             throw new InvalidOperationException("Cannot edit a DELETED app");
+        }
+
+        if (request.getName() != null && request.getName().length() > MAX_APP_NAME_LENGTH) {
+            throw new IllegalArgumentException("App name cannot exceed " + MAX_APP_NAME_LENGTH + " characters.");
         }
 
         if (request.getName() == null && request.getStatus() == null) {
@@ -119,8 +139,13 @@ public class AppService {
 
         if (request.getStatus() != null) {
             String newStatus = request.getStatus().toUpperCase();
-            if (!Set.of("ACTIVE", "ARCHIVED", "DELETED").contains(newStatus)) {
-                throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED, DELETED");
+
+            if (newStatus.equals("DELETED")) {
+                throw new InvalidOperationException("Use the DELETE endpoint to delete an application");
+            }
+
+            if (!Set.of("ACTIVE", "ARCHIVED").contains(newStatus)) {
+                throw new IllegalArgumentException("Invalid status value. Allowed values: ACTIVE, ARCHIVED");
             }
 
             if (statusChanged) {
@@ -133,10 +158,6 @@ public class AppService {
                     case "ARCHIVED":
                         app.setActive(false);
                         app.setDeleted(false);
-                        break;
-                    case "DELETED":
-                        app.setActive(false);
-                        app.setDeleted(true);
                         break;
                 }
             }
@@ -151,6 +172,7 @@ public class AppService {
         return mapToDto(savedApp);
     }
 
+    @Transactional // Ensure this operation is transactional
     public void deleteApp(Long id) {
         log.info("Attempting to delete app with ID: {}", id);
         App app = appRepository.findById(id)
@@ -160,6 +182,19 @@ public class AppService {
             log.warn("Delete failed: Application with ID {} is already deleted", id);
             throw new InvalidOperationException("App already deleted");
         }
+
+        // Mark associated templates as deleted
+        List<Template> templates = templateRepository.findByAppId(app.getId());
+        for (Template template : templates) {
+            template.setDeleted(true);
+            template.setActive(false);
+            template.setStatus("DELETED");
+            template.setUpdatedAt(LocalDateTime.now());
+            template.setUpdatedBy(getCurrentAuditor());
+        }
+        templateRepository.saveAll(templates); // Save all updated templates
+        log.info("Marked {} templates as DELETED for app '{}' (ID: {}).", templates.size(), app.getName(), id);
+
 
         app.setDeleted(true);
         app.setActive(false);
